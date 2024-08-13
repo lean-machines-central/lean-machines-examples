@@ -75,7 +75,7 @@
    "type": "git",
    "subDir": null,
    "scope": "",
-   "rev": "3558857dd97c4c159a19148ef757cb2eab8e79da",
+   "rev": "27e1d24d3c4733d3d33d38aef1dc26abb5dd6a1a",
    "name": "«lean-machines»",
    "manifestFile": "lake-manifest.json",
    "inputRev": "main",
