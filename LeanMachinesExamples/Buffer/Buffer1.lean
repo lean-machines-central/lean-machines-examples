@@ -62,7 +62,7 @@ def B1.Init : InitREvent (B0 ctx) (B1 ctx α) Unit Unit :=
     simulation := by simp [FRefinement.lift, B0.Init]
   }
 
-/-- Event: A refinement of `B0.Put` that preprends an element `x`
+/-- Event: A refinement of `B0.Put` that prepends an element `x`
 to the buffer `data`.
 The event is proved convergent.
  -/
@@ -88,6 +88,39 @@ def B1.Put : ConvergentREvent Nat (B0 ctx) (B1 ctx α) α Unit Unit Unit :=
       simp [Machine.invariant] ; intros ; omega
 
   }
+
+/-!
+We illustrate here the fact that the same abstract event may be
+refined multiple times at the concrete level.
+-/
+
+/-- Event: A refinement of `B0.Put` that appends an element `x`
+to the buffer `data`.
+The event is proved convergent.
+ -/
+def B1.PutLast : ConvergentREvent Nat (B0 ctx) (B1 ctx α) α Unit Unit Unit :=
+  newConvergentFREvent' B0.Put {
+    guard := fun b1 _ => b1.data.length < ctx.maxSize
+    action := fun b1 x => { data := b1.data ++ [x] }
+
+    lift_in := fun _ => ()
+
+    safety := fun b1 x => by
+      simp [Machine.invariant] ; intros ; linarith
+
+    strengthening := fun b1 _ => by
+      simp [Machine.invariant, B0.Put, FRefinement.lift]
+
+    simulation := fun b1 _ => by
+      simp [Machine.invariant, B0.Put, FRefinement.lift]
+
+    variant := fun b1 => ctx.maxSize - b1.data.length
+
+    convergence := fun b1 x => by
+      simp [Machine.invariant] ; intros ; omega
+
+  }
+
 
 /-- Event: Removing an arbitrary element from the buffer.
 This refines the abstract event `B0.Fetch`.
