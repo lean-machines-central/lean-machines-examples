@@ -87,8 +87,7 @@ def LeaveToMainland : OrdinaryEvent (Bridge0 ctx) Unit Unit := newEvent'' {
   safety := fun m => by
     simp [Machine.invariant]
     intros Hinv _  -- remark : 0 - 1 = 0
-    refine Nat.sub_le_of_le_add ?h
-    exact Nat.le_step Hinv
+    omega
 }
 
 /-- Deadlock fredom property expressed as a theorem.
@@ -100,9 +99,7 @@ by
   simp [Machine.invariant, EnterFromMainland, LeaveToMainland, newEvent']
   intro Hinv
   have Hctx := ctx.maxCars_pos
-  have Hnb : m.nbCars < ctx.maxCars ∨ m.nbCars = ctx.maxCars := by
-    exact Nat.lt_or_eq_of_le Hinv
-  cases Hnb <;> simp [*]
+  omega
 
 end Bridge0
 
