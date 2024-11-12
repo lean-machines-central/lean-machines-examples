@@ -47,7 +47,7 @@ mostly functional nature.
 namespace AlarmSystem
 
 /-- Qualification of experts.-/
-inductive Qualification :=
+inductive Qualification where
 | Elec | Mech | Bio | Chem
   deriving Repr, DecidableEq
 

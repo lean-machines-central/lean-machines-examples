@@ -21,7 +21,7 @@ This is an example of a superposition refinement
 namespace BridgeSpec
 
 /-- Traffic light colors. -/
-inductive Color := | Green | Red
+inductive Color where | Green | Red
   deriving Repr, BEq, DecidableEq
 
 /-- The state of the second Bridge refinement.
