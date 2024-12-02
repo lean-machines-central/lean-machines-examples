@@ -110,7 +110,6 @@ newAbstractConvergentSREvent' ASys0.AddExpert {
       · simp
         exact Hinv₂ per
       · simp
-        exact Finset.subset_union_left
     -- next
     simp [ASys1.invariant₃] at *
     exact fun per a => Hinv₃ per a
