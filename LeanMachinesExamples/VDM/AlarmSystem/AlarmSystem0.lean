@@ -128,7 +128,6 @@ def AddExpert : ConvergentEvent Nat (ASys0 ctx) Expert Unit := newConvergentEven
     case left =>
       simp [ASys0.invariant₁] at *
       have Hcard := Finset.card_union_le asys.experts {exp}
-      simp at Hcard
       exact Nat.le_trans Hcard Hgrd₂
     case right =>
       simp [ASys0.invariant₂] at *
