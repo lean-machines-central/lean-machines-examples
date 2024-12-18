@@ -32,9 +32,9 @@ This is the running illustrative example of the IFM2024 paper:
 
 /-!
 
-## First refinement step
+## Abstract machine
 
-In this first refinement, only the number of elements in the buffer is tracked.
+At the most abstract level, only the number of elements in the buffer is tracked.
 
 -/
 
