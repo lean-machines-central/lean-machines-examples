@@ -4,6 +4,7 @@ import LeanMachines.Event.Ordinary
 
 namespace Clocked
 
+@[ext]
 structure Clock where
   val : Nat
 deriving Repr, BEq, DecidableEq
@@ -20,22 +21,21 @@ instance: Add Clock where
   add ck₁ ck₂ := {val:=ck₁.val + ck₂.val}
 
 instance: LT Clock where
-  lt ck₁ ck₂ := Ord.compare ck₁.val ck₂.val == Ordering.lt
+  lt ck₁ ck₂ := ck₁.val < ck₂.val
 
 @[simp]
 theorem Clock_LT (ck₁ ck₂ : Clock):
   ck₁.val < ck₂.val
   → ck₁ < ck₂ :=
 by
-  -- XXX : longer than expected
-  intro Hval
-  simp [LT.lt, compare]
-  unfold LT.lt at Hval
-  unfold instLTNat at Hval
-  simp at Hval
-  unfold compareOfLessAndEq
-  simp [Hval]
-  rfl
+  intro Hval ; exact Hval
+
+@[simp]
+theorem Clock_LT_conv (ck₁ ck₂ : Clock):
+  ck₁ < ck₂
+  → ck₁.val < ck₂.val :=
+by
+  intro Hval ; exact Hval
 
 structure EmptyCtx where
 
