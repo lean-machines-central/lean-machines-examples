@@ -78,6 +78,7 @@ def EnterFromMainland : OrdinaryEvent (Bridge0 ctx) Unit Unit := newEvent'' {
     simp [Machine.invariant]
     intros _ Hgrd
     exact Hgrd
+
 }
 
 /-- Event: a car exits the Bridge towards the mainland. -/

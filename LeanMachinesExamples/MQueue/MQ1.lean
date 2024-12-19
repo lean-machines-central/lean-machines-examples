@@ -161,12 +161,52 @@ def MQ1.Enqueue [DecidableEq α] : OrdinaryREvent (MQ0 α ctx.toBoundedCtx) (MQ1
 
   }
 
-/-
-def MQ1.priorities (MQ1 α ctx) : Finset Prio :=
-  Finset.fold
+def MQ1.priorities [DecidableEq α] (mq : MQ1 α ctx) : Finset Prio :=
+  Finset.fold (·∪·) ∅ (fun msg => {msg.prio}) mq.messages
 
-def MQ1.maxPrio (MQ1 α ctx) (default : 0) : Prio :=
-  Finset.fold max
+theorem MQ1_prios_in [DecidableEq α] (mq : MQ1 α ctx):
+  ∀ msg ∈ mq.messages, msg.prio ∈ mq.priorities :=
+by
+  simp [MQ1.priorities]
+  induction mq.messages using Finset.induction_on
+  case empty => simp
+  case insert msg messages Hmsg Hind =>
+    simp
+    intros msg' Hmsg'
+    right
+    exact Hind msg' Hmsg'
+
+def MQ1.maxPrio [DecidableEq α] (mq : MQ1 α ctx) : Prio :=
+  Finset.fold max 0 id mq.priorities
+
+theorem MQ1.maxPrio_max
+  ∀ msg ∈ mq.messages, msg.prio ≤ mq.maxPrio :=
+by
+  simp [MQ1.maxPrio]
+  intro msg Hmsg
+  rw [@Finset.le_fold_max]
+  right
+  exists msg.prio
+  constructor
+  · exact MQ1_prios_in mq msg Hmsg
+  · exact Preorder.le_refl msg.prio
+
+theorem MQ1.maxPrio_in [DecidableEq α] (mq : MQ1 α ctx):
+  Finset.Nonempty mq.priorities
+  → mq.maxPrio ∈ mq.priorities :=
+by
+  simp [maxPrio]
+  induction mq.priorities using Finset.induction
+  case empty => simp
+  case insert p ps Hp Hind =>
+    sorry
+
+/-
+def MQ1.maxElemEx [DecidableEq α] (mq : MQ1 α ctx):
+  Finset.Nonempty mq.messages
+  → ∃ msg ∈ mq.messages, msg.prio = mq.maxPrio :=
+by
+  intro Hne
 -/
 
 def MQ1.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) Unit (α × Prio) Unit α :=
@@ -208,12 +248,8 @@ def MQ1.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (M
     feasibility mq _ := by
       simp [Machine.invariant]
       intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd
-      have Hex : ∃ msg, msg ∈ mq.messages := by
-        refine Finset.Nonempty.exists_mem ?_
-        exact Finset.nonempty_iff_ne_empty.mpr Hgrd
-      obtain ⟨msg, Hmsg⟩ := Hex
-      exists msg.payload
       -- TODO : show that there is a maximum prio
+      exists mq.maxPrio
       sorry
 
     strengthening mq _ := by
