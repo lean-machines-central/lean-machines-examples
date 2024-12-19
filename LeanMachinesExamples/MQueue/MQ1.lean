@@ -161,18 +161,27 @@ def MQ1.Enqueue [DecidableEq α] : OrdinaryREvent (MQ0 α ctx.toBoundedCtx) (MQ1
 
   }
 
-def MQ0.Dequeue [DecidableEq α] : OrdinaryRNDEvent (Bounded ctx) (MQ0 α ctx) Unit α Unit Unit :=
-  newRNDEvent Decr.toOrdinaryNDEvent {
+/-
+def MQ1.priorities (MQ1 α ctx) : Finset Prio :=
+  Finset.fold
+
+def MQ1.maxPrio (MQ1 α ctx) (default : 0) : Prio :=
+  Finset.fold max
+-/
+
+def MQ1.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) Unit (α × Prio) Unit α :=
+  newRNDEvent MQ0.Dequeue.toOrdinaryNDEvent {
     lift_in := id
-    lift_out _ := ()
+    lift_out := fun (x, _) => x
     guard mq _ := mq.messages ≠ ∅
-    effect := fun mq _ (y, mq') =>
-                ∃ msg ∈ mq.messages, y = msg.payload
+    effect := fun mq _ ((y, py), mq') =>
+                ∃ msg ∈ mq.messages, y = msg.payload ∧ py = msg.prio
                                      ∧ mq' = {mq with messages := mq.messages \ {msg}}
+                                     ∧ ∀ msg' ∈ mq.messages, msg' ≠ msg → msg'.prio ≤ msg.prio
 
     safety mq _ := by
       simp [Machine.invariant]
-      intros Hinv₁ Hinv₂ Hinv₃ Hgrd y mq' msg Hmsg Hy Hmq'
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd y py mq' msg Hmsg Hy Hpy Hmq' Hprio
       have Hsub: mq'.messages ⊆ mq.messages := by
         simp [Hmq']
       constructor
@@ -186,37 +195,38 @@ def MQ0.Dequeue [DecidableEq α] : OrdinaryRNDEvent (Bounded ctx) (MQ0 α ctx) U
         have Hmsg'' : msg' ∈ mq.messages := by
           exact Hsub Hmsg'
         exact Hinv₂ msg' (Hsub Hmsg')
+      constructor
       · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
         have Hmsg₁' : msg₁ ∈ mq.messages := by
           exact Hsub Hmsg₁
         have Hmsg₂' : msg₂ ∈ mq.messages := by
           exact Hsub Hmsg₂
         exact Hinv₃ msg₁ (Hsub Hmsg₁) msg₂ Hmsg₂' Hts
+      · intros msg Hmsg
+        exact Hinv₄ msg (Hsub Hmsg)
 
     feasibility mq _ := by
       simp [Machine.invariant]
-      intros Hinv₁ Hinv₂ Hinv₃ Hgrd
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd
       have Hex : ∃ msg, msg ∈ mq.messages := by
         refine Finset.Nonempty.exists_mem ?_
         exact Finset.nonempty_iff_ne_empty.mpr Hgrd
       obtain ⟨msg, Hmsg⟩ := Hex
       exists msg.payload
-      exists {clock := mq.clock, messages := mq.messages \ {msg}}
-      exists msg
+      -- TODO : show that there is a maximum prio
+      sorry
 
     strengthening mq _ := by
-      simp [Machine.invariant, Refinement.refine, Decr, FRefinement.lift]
-      intros Hinv₁ Hinv₂ Hinv₃ Hgrd
-      exact Finset.nonempty_iff_ne_empty.mpr Hgrd
+      simp [Machine.invariant, Refinement.refine, MQ0.Dequeue, FRefinement.lift]
 
     simulation mq _ := by
-      simp [Machine.invariant, Refinement.refine, Decr, FRefinement.lift]
-      intros Hinv₁ Hinv₂ Hinv₃ Hgrd y mq' msg Hmsg Hy Hmq'
+      simp [Machine.invariant, Refinement.refine, MQ0.Dequeue, FRefinement.lift]
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd y py mq' msg Hmsg Hy Hpy Hmq' Hprio
       simp [Hmq']
-      have Hcard : (mq.messages \ {msg}).card = mq.messages.card - 1 := by
-        apply Finset.card_sdiff
-        exact Finset.singleton_subset_iff.mpr Hmsg
-      simp [Hcard]
+      exists msg
+      simp [Hmsg, Hy]
+      -- TODO
+      sorry
 
   }
 
