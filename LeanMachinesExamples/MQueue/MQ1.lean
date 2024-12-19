@@ -1,13 +1,10 @@
 import LeanMachinesExamples.MQueue.Bounded
 import LeanMachinesExamples.MQueue.Prioritized
 import LeanMachinesExamples.MQueue.Clocked
+import LeanMachinesExamples.MQueue.MQ0
 
 import LeanMachines.Refinement.Functional.Basic
 import LeanMachines.Refinement.Functional.Concrete
-
-import Mathlib.Data.Finset.Card
-import Mathlib.Data.Finset.SDiff
-
 
 namespace MQueue
 
@@ -15,69 +12,84 @@ open Bounded
 open Prioritized
 open Clocked
 
-structure Message0 (α : Type 0) [instDec: DecidableEq α] where
-  payload : α
-  timestamp : Clock
+structure MQContext extends BoundedCtx, PrioCtx
 
-instance [instDec: DecidableEq α] (m₁ m₂ : @Message0 α instDec): Decidable (m₁ = m₂) :=
-  by cases m₁
-     case mk x₁ t₁ =>
-     cases m₂
-     case mk x₂ t₂ =>
-       simp
-       exact instDecidableAnd
+structure Message (α : Type 0) [instDec: DecidableEq α] extends Message0 α where
+  prio : Prio
 
-structure MQ0 (α : Type 0) [instDec: DecidableEq α] (ctx : BoundedCtx)
+instance [instDec: DecidableEq α] (m₁ m₂ : @Message α instDec): Decidable (m₁ = m₂) :=
+  by cases m₁ ; cases m₂
+     simp
+     exact instDecidableAnd
+
+instance [DecidableEq α]: LT (Message α) where
+  lt m₁ m₂ := (m₁.prio < m₂.prio) ∨ (m₁.prio = m₂.prio ∧ m₁.timestamp < m₂.timestamp)
+
+structure MQ1 (α : Type 0) [instDec: DecidableEq α] (ctx : MQContext)
     extends Clocked where
-  messages : Finset (Message0 (instDec:=instDec))
+  messages : Finset (Message α)
 
-instance [instDec: DecidableEq α]: Machine BoundedCtx (MQ0 α (instDec:=instDec) ctx) where
+-- We axiomatize the fact that lifting messages is injective
+axiom liftMessage_inj_ax {α} [instDec: DecidableEq α]:
+  Function.Injective (Message.toMessage0 (instDec:=instDec))
+
+@[simp]
+def liftMessage [DecidableEq α] : Function.Embedding (Message α) (Message0 α) :=
+  {
+    toFun := Message.toMessage0
+    inj' := liftMessage_inj_ax
+  }
+
+@[simp]
+def MQ1.lift [DecidableEq α] (mq : MQ1 α ctx) : MQ0 α ctx.toBoundedCtx :=
+  {clock := mq.clock, messages := Finset.map liftMessage mq.messages}
+
+instance [instDec: DecidableEq α]: Machine MQContext (MQ1 α (instDec:=instDec) ctx) where
   context := ctx
   invariant mq := mq.messages.card ≤ ctx.maxCount
                   ∧ (∀ msg ∈ mq.messages, msg.timestamp < mq.clock)
                   ∧ (∀ msg₁ ∈ mq.messages, ∀ msg₂ ∈ mq.messages, msg₁.timestamp = msg₂.timestamp → msg₁ = msg₂)
+                  ∧ (∀ msg ∈ mq.messages, ctx.minPrio ≤ msg.prio ∧ msg.prio ≤ ctx.maxPrio)
   reset := { messages := ∅, clock := 0}
 
-instance [instDec: DecidableEq α] : FRefinement (Bounded ctx) (MQ0 α ctx) where
-  lift mq := { count := mq.messages.card }
-  lift_safe mq := by simp [Machine.invariant] ; intros H _ _ ; exact H
+instance [instDec: DecidableEq α] : FRefinement (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) where
+  lift := MQ1.lift
+  lift_safe mq := by
+    simp [Machine.invariant]
+    intros Hinv₁ Hinv₂ Hinv₃ Hinv₄
+    constructor
+    · exact Hinv₁
+    constructor
+    · intros msg Hmsg ; exact Hinv₂ msg Hmsg
+    · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
+      exact congrArg Message.toMessage0 (Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂ Hts)
 
-/-  Cannot yet exploit this   (refined events could *not* be events but just instances of typeclasses)
-instance [instDec: DecidableEq α] : FRefinement Clocked (MQ0 α ctx) where
-  lift mq := { clock := mq.clock }
-  lift_safe mq := by simp [Machine.invariant]
--/
-
-def MQ0.Init [instDec: DecidableEq α] : InitREvent (Bounded ctx) (MQ0 α ctx) Unit Unit :=
-  newInitREvent'' Bounded.Init {
+def MQ1.Init [instDec: DecidableEq α] : InitREvent (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) Unit Unit :=
+  newInitREvent'' MQ0.Init.toInitEvent {
     init := { messages := ∅, clock := 0}
     safety _ := by simp [Machine.invariant]
-    strengthening _ := by simp [Machine.invariant, Bounded.Init]
-    simulation _ := by simp [Machine.invariant, Refinement.refine, Bounded.Init, FRefinement.lift]
+    strengthening _ := by simp [Machine.invariant, MQ0.Init]
+    simulation _ := by simp [Machine.invariant, Refinement.refine, MQ0.Init, FRefinement.lift]
   }
 
-theorem Finset_notElem_card {α} [DecidableEq α] (xs : Finset α) (x : α):
-  x ∉ xs → (xs ∪ {x}).card = xs.card + 1 :=
-by
-  intro Hx
-  have Hdisj : Disjoint xs {x} := by
-    exact Finset.disjoint_singleton_right.mpr Hx
-  apply Finset.card_union_of_disjoint Hdisj
+def MQ1.Enqueue [DecidableEq α] : OrdinaryREvent (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) (α × Prio) Unit α Unit :=
+  newFREvent' MQ0.Enqueue.toOrdinaryEvent {
+    lift_in := fun (x, _) => x
+    guard := fun mq (x, px) => mq.messages.card < ctx.maxCount
+                               ∧ (∀ msg ∈ mq.messages, msg.timestamp ≠ mq.clock)
+                               ∧ ctx.minPrio ≤ px ∧ px ≤ ctx.maxPrio
+    action := fun mq (x, px) =>
+                { messages := mq.messages ∪ {⟨⟨x, mq.clock⟩, px⟩},
+                  clock := mq.clock + 1 }
 
-
-def MQ0.Enqueue [DecidableEq α] : OrdinaryREvent (Bounded ctx) (MQ0 α ctx) α Unit Unit Unit :=
-  newFREvent' Bounded.Incr {
-    lift_in := fun _ => ()
-    guard mq x := mq.messages.card < ctx.maxCount ∧ ⟨x, mq.clock⟩ ∉ mq.messages
-    action mq x := { messages := mq.messages ∪ {⟨x, mq.clock⟩},
-                     clock := mq.clock + 1 }
-
-    safety mq x := by
+    safety := fun mq (x, px) => by
       simp [Machine.invariant]
-      intros Hinv₁ Hinv₂ Hinv₃ Hgrd₁ Hgrd₂
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd₁ Hgrd₂ Hgrd₃ Hgrd₄
       constructor
-      · have Hcard : (mq.messages ∪ {⟨x, mq.clock⟩}).card = mq.messages.card + 1 := by
-          apply Finset_notElem_card ; assumption
+      · have Hcard : (mq.messages ∪ {⟨⟨x, mq.clock⟩, px⟩}).card = mq.messages.card + 1 := by
+          apply Finset_notElem_card
+          intro Hcontra
+          exact Hgrd₂ { payload := x, timestamp := mq.clock, prio := px } Hcontra rfl
         rw [Hcard]
         exact Hgrd₁
       constructor
@@ -88,6 +100,7 @@ def MQ0.Enqueue [DecidableEq α] : OrdinaryREvent (Bounded ctx) (MQ0 α ctx) α 
         case _ Hmsg =>
           simp [Hmsg]
           exact Nat.lt_add_one mq.clock.val
+      constructor
       · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
         cases Hmsg₁
         case _ Hmsg₁ =>
@@ -120,31 +133,33 @@ def MQ0.Enqueue [DecidableEq α] : OrdinaryREvent (Bounded ctx) (MQ0 α ctx) α 
             contradiction
           case _ Hmsg₂ =>
             simp [Hmsg₁, Hmsg₂]
+      · intros msg Hmsg
+        cases Hmsg
+        case _ Hmsg =>
+          exact Hinv₄ msg Hmsg
+        case _ Hmsg =>
+          simp [Hmsg]
+          exact ⟨Hgrd₃, Hgrd₄⟩
 
-    strengthening mq x := by
-      simp [Machine.invariant, FRefinement.lift, Incr]
-      intros _ _ _ Hgrd₁ _
-      exact Hgrd₁
+    strengthening := fun mq (x, px) => by
+      simp [Machine.invariant, FRefinement.lift, MQ0.Enqueue]
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd₁ Hgrd₂ Hgrd₃ Hgrd₄
+      constructor
+      · exact Hgrd₁
+      · intros msg Hmsg Hcontra
+        have Hclk : msg.timestamp < mq.clock := by
+          exact Hinv₂ msg Hmsg
+        simp [Hcontra] at Hclk
+        have Hclk' : mq.clock.val < mq.clock.val := by
+              exact Hclk
+        exact (lt_self_iff_false mq.clock.val).mp Hclk'
 
-    simulation mq x := by
-      simp [Machine.invariant, FRefinement.lift, Incr]
-      intros Hinv₁ Hinv₂ Hinv₃ Hgrd₁ Hgrd₂
-      have Hcard : (mq.messages ∪ {⟨x, mq.clock⟩}).card = mq.messages.card + 1 := by
-          apply Finset_notElem_card ; exact Hgrd₂
-      rw [Hcard]
+    simulation := fun mq (x, px) => by
+      simp [Machine.invariant, FRefinement.lift, MQ0.Enqueue]
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd₁ Hgrd₂ Hgrd₃ Hgrd₄
+      simp [Finset.map_union]
 
   }
-
-theorem Finset_card_sdiff_le [DecidableEq α] (t s : Finset α):
-  (t \ s).card ≤ t.card :=
-by
-  have H₁ : (t \ s).card + s.card = (t ∪ s).card := by
-    exact Finset.card_sdiff_add_card t s
-  have H₂ : (t ∪ s).card ≤ t.card + s.card := by
-    exact Finset.card_union_le t s
-  have H₃ : (t \ s).card + s.card ≤ t.card + s.card := by
-    exact le_of_eq_of_le H₁ H₂
-  exact Nat.add_le_add_iff_right.mp H₃
 
 def MQ0.Dequeue [DecidableEq α] : OrdinaryRNDEvent (Bounded ctx) (MQ0 α ctx) Unit α Unit Unit :=
   newRNDEvent Decr.toOrdinaryNDEvent {
