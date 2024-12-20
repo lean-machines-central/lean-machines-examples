@@ -179,7 +179,7 @@ by
 def MQ1.maxPrio [DecidableEq α] (mq : MQ1 α ctx) : Prio :=
   Finset.fold max 0 id mq.priorities
 
-theorem MQ1.maxPrio_max
+theorem MQ1.maxPrio_max [DecidableEq α] (mq : MQ1 α ctx) :
   ∀ msg ∈ mq.messages, msg.prio ≤ mq.maxPrio :=
 by
   simp [MQ1.maxPrio]
@@ -199,15 +199,62 @@ by
   induction mq.priorities using Finset.induction
   case empty => simp
   case insert p ps Hp Hind =>
-    sorry
+    rw [@Finset.mem_insert]
+    intro Hne
+    by_cases ps.Nonempty
+    case pos Hne' =>
+      have Hind' := Hind Hne'
+      by_cases p ≤ Finset.fold max 0 (fun x => x) ps
+      case pos Hp =>
+        simp [Hp]
+        right
+        exact Hind Hne'
+      case neg Hp =>
+        simp [Hp]
+        left
+        exact le_of_not_ge Hp
 
-/-
+    case neg He =>
+      simp [*] at *
+      simp [He]
+      apply Prio_lift_le
+      exact StrictMono.minimal_preimage_bot (fun ⦃a b⦄ a => a) rfl p.prio
+
+theorem MQ1.msgEx [DecidableEq α] (mq : MQ1 α ctx):
+  ∀ prio ∈ mq.priorities, ∃ msg ∈ mq.messages, msg.prio = prio :=
+by
+  unfold MQ1.priorities
+  induction mq.messages using Finset.induction
+  case empty => simp
+  case insert msg messages Hmsg Hind =>
+    simp
+    intro msg' Hmsg'
+    exact Or.symm (Or.intro_left (msg.prio = msg') (Hind msg' Hmsg'))
+
+def MQ1.Nonempty  [DecidableEq α] (mq : MQ1 α ctx):
+  Finset.Nonempty mq.messages
+  → Finset.Nonempty mq.priorities :=
+by
+  intro Hne
+  by_cases mq.priorities = ∅
+  case pos Hpos =>
+    have Hex : ∃ msg, msg ∈ mq.messages := by
+      exact Hne
+    obtain ⟨msg, Hmsg⟩ := Hex
+    have Hprio : msg.prio ∈ mq.priorities := by
+      exact MQ1_prios_in mq msg Hmsg
+    simp [Hpos] at Hprio
+  case neg Hneg =>
+    exact Finset.nonempty_iff_ne_empty.mpr Hneg
+
 def MQ1.maxElemEx [DecidableEq α] (mq : MQ1 α ctx):
   Finset.Nonempty mq.messages
   → ∃ msg ∈ mq.messages, msg.prio = mq.maxPrio :=
 by
   intro Hne
--/
+  refine msgEx mq mq.maxPrio ?_
+  refine maxPrio_in mq ?_
+  exact Nonempty mq Hne
 
 def MQ1.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) Unit (α × Prio) Unit α :=
   newRNDEvent MQ0.Dequeue.toOrdinaryNDEvent {
