@@ -256,6 +256,34 @@ by
   refine maxPrio_in mq ?_
   exact Nonempty mq Hne
 
+def Finset_map_sdiff [DecidableEq α] [DecidableEq β] (s t : Finset α) (f : α ↪ β):
+  Finset.map f (s \ t) = (Finset.map f s) \ (Finset.map f t) :=
+by
+  induction s using Finset.induction
+  case empty => simp
+  case insert x xs Hx Hind =>
+    simp [Hx]
+    by_cases f x ∈ Finset.map f xs
+    case pos Hfx =>
+      have Hx' : x ∈ xs := by exact (Finset.mem_map' f).mp Hfx
+      contradiction
+    case neg Hfx =>
+      by_cases x ∈ t
+      case pos Hxx =>
+        rw [Finset.insert_sdiff_of_mem xs Hxx]
+        simp [Hind]
+        have Hfx' : f x ∈ Finset.map f t := by
+          exact (Finset.mem_map' f).mpr Hxx
+        exact Eq.symm (Finset.insert_sdiff_of_mem (Finset.map f xs) Hfx')
+      case neg Hxx =>
+        rw [Finset.insert_sdiff_of_not_mem xs Hxx]
+        rw [@Finset.map_insert]
+        simp [Hind]
+        have Hfx' : f x ∉ Finset.map f t := by
+          rw [@Finset.mem_map']
+          assumption
+        exact Eq.symm (Finset.insert_sdiff_of_not_mem (Finset.map f xs) Hfx')
+
 def MQ1.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) Unit (α × Prio) Unit α :=
   newRNDEvent MQ0.Dequeue.toOrdinaryNDEvent {
     lift_in := id
@@ -292,12 +320,18 @@ def MQ1.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (M
       · intros msg Hmsg
         exact Hinv₄ msg (Hsub Hmsg)
 
-    feasibility mq _ := by
+    feasibility mq x := by
       simp [Machine.invariant]
       intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd
       -- TODO : show that there is a maximum prio
-      exists mq.maxPrio
-      sorry
+      have Hne : mq.messages.Nonempty := by exact Finset.nonempty_iff_ne_empty.mpr Hgrd
+      obtain ⟨msg, ⟨Hmsg, Hprio⟩⟩ := MQ1.maxElemEx mq Hne
+      exists msg.payload ; exists msg.prio
+      exists { toClocked := mq.toClocked, messages := mq.messages \ {msg} }
+      exists msg
+      simp [*]
+      intros msg' Hmsg' Hinj
+      exact maxPrio_max mq msg' Hmsg'
 
     strengthening mq _ := by
       simp [Machine.invariant, Refinement.refine, MQ0.Dequeue, FRefinement.lift]
@@ -308,8 +342,7 @@ def MQ1.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (M
       simp [Hmq']
       exists msg
       simp [Hmsg, Hy]
-      -- TODO
-      sorry
+      simp [Finset_map_sdiff]
 
   }
 
