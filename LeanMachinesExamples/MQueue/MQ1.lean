@@ -22,8 +22,8 @@ instance [instDec: DecidableEq α] (m₁ m₂ : @Message α instDec): Decidable 
      simp
      exact instDecidableAnd
 
-instance [DecidableEq α]: LT (Message α) where
-  lt m₁ m₂ := (m₁.prio < m₂.prio) ∨ (m₁.prio = m₂.prio ∧ m₁.timestamp < m₂.timestamp)
+--instance [DecidableEq α]: LT (Message α) where
+--  lt m₁ m₂ := (m₁.prio < m₂.prio) ∨ (m₁.prio = m₂.prio ∧ m₁.timestamp < m₂.timestamp)
 
 structure MQ1 (α : Type 0) [instDec: DecidableEq α] (ctx : MQContext)
     extends Clocked where
@@ -150,9 +150,6 @@ def MQ1.Enqueue [DecidableEq α] : OrdinaryREvent (MQ0 α ctx.toBoundedCtx) (MQ1
         have Hclk : msg.timestamp < mq.clock := by
           exact Hinv₂ msg Hmsg
         simp [Hcontra] at Hclk
-        have Hclk' : mq.clock.val < mq.clock.val := by
-              exact Hclk
-        exact (lt_self_iff_false mq.clock.val).mp Hclk'
 
     simulation := fun mq (x, px) => by
       simp [Machine.invariant, FRefinement.lift, MQ0.Enqueue]

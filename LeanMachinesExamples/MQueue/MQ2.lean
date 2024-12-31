@@ -223,7 +223,6 @@ def MQ2.Enqueue [DecidableEq α]: OrdinaryREvent (MQ1 α ctx) (MQ2 α ctx) (α �
         intro Hcontra
         have Hinv₂' := Hinv₂ { payload := x, timestamp := mq.clock, prio := px } Hcontra
         simp at Hinv₂'
-        exact Hgrd₂ { payload := x, timestamp := mq.clock, prio := px } Hcontra rfl
 
     lift_in := fun (x, px) => (x, px)
 

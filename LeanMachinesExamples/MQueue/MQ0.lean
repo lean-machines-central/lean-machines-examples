@@ -15,6 +15,7 @@ open Bounded
 open Prioritized
 open Clocked
 
+@[ext]
 structure Message0 (α : Type 0) [instDec: DecidableEq α] where
   payload : α
   timestamp : Clock

@@ -1,6 +1,6 @@
 import LeanMachinesExamples.MQueue.MQ2
 
-import Mathlib.Data.List.Sort
+import LeanMachines.Refinement.Strong.Basic
 
 namespace MQueue
 
@@ -31,20 +31,154 @@ by
   right
   exact ⟨Hp, Hts⟩
 
+theorem Message_lt_trans [DecidableEq α] (m₁ m₂ m₃ : Message α):
+  m₁ < m₂ → m₂ < m₃
+  → m₁ < m₃ :=
+by
+  intros H₁ H₂
+  unfold LT.lt at *
+  simp [instLTMessage] at *
+  cases H₁
+  case inl H₁ =>
+    cases H₂
+    case inl H₂ =>
+      left
+      apply lt_trans H₁ H₂
+    case inr H₂ =>
+      simp [H₂] at H₁
+      left
+      assumption
+  case inr H₁ =>
+    cases H₂
+    case inl H₂ =>
+      obtain ⟨H₁, H₁'⟩ := H₁
+      rw [←H₁] at H₂
+      left
+      assumption
+    case inr H₂ =>
+      right
+      obtain ⟨H₁, H₁'⟩ := H₁
+      obtain ⟨H₂, H₂'⟩ := H₂
+      simp [H₁,H₂]
+      apply lt_trans H₁' H₂'
+
 instance [DecidableEq α]: LE (Message α) where
   le m₁ m₂ := m₁ < m₂ ∨ m₁ = m₂
 
 instance [DecidableEq α]: Preorder (Message α) where
   le_refl m := by simp [LE.le]
+
   le_trans m₁ m₂ m₃ := by
+    simp [LE.le]
+    intros H₁ H₂
+    cases H₁
+    case inl H₁ =>
+      cases H₂
+      case inl H₂ =>
+        left
+        exact Message_lt_trans m₁ m₂ m₃ H₁ H₂
+      case inr H₂ =>
+        left
+        exact lt_of_lt_of_eq H₁ H₂
+    case inr H₁ =>
+      cases H₂
+      case inl H₂ =>
+        left
+        exact lt_of_eq_of_lt H₁ H₂
+      case inr H₂ =>
+        right
+        simp [H₁, H₂]
+
+  lt_iff_le_not_le m₁ m₂ := by
+    simp [LE.le]
+    constructor
+    case mp =>
+      intro H
+      constructor
+      · left ; assumption
+      · constructor
+        · intro H'
+          unfold LT.lt at *
+          simp [instLTMessage] at *
+          cases H
+          case _ H =>
+            cases H'
+            case _ H' =>
+              have H'' : ¬ (m₂.prio < m₁.prio) := by
+                exact not_lt_of_gt H
+              contradiction
+            case _ H' =>
+              simp [H'] at H
+          case _ H =>
+            obtain ⟨H₁,H₂⟩ := H
+            cases H'
+            case _ H' =>
+              rw [←H₁] at H'
+              exact (lt_self_iff_false m₁.prio).mp H'
+            case _ H' =>
+              simp [H₁] at H'
+              have H'' : ¬ (m₂.timestamp < m₁.timestamp) := by
+                exact not_lt_of_gt H₂
+              contradiction
+        · intro Heq
+          rw [Heq] at H
+          unfold LT.lt at H
+          simp [instLTMessage] at H
+    case mpr =>
+      intro ⟨H₁, H₂, H₃⟩
+      cases H₁
+      case inl H₁ =>
+        assumption
+      case inr H₁ =>
+        exact False.elim (H₃ (id (Eq.symm H₁)))
+
+instance [DecidableEq α]: PartialOrder (Message α) where
+  le_antisymm m₁ m₂ := by
     intros H₁ H₂
     simp [LE.le] at *
     cases H₁
     case inl H₁ =>
       cases H₂
       case inl H₂ =>
-        left
+        unfold LT.lt at *
+        simp [instLTMessage] at *
+        cases H₁
+        case inl H₁ =>
+          cases H₂
+          case inl H₂ =>
+            have Hcontra: ¬ (m₁.prio < m₂.prio) := by
+              exact not_lt_of_gt H₂
+            contradiction
+          case inr H₂ =>
+            simp [H₂.1] at H₁
+        case inr H₁ =>
+          obtain ⟨H₁,H₁'⟩ := H₁
+          cases H₂
+          case _ H₂ =>
+            simp [H₁] at H₂
+          case _ H₂ =>
+            simp [H₁] at H₂
+            have Hcontra: ¬ (m₂.timestamp < m₁.timestamp) := by
+              exact not_lt_of_gt H₁'
+            contradiction
+      case inr H₂ =>
+        simp [H₂]
+    case inr H₁ =>
+      simp [H₁]
 
+-- Remark : messages do not form a linear order since payload are not observed
+-- (the order is not total)
+
+instance Message.instDecidableLT [DecidableEq α] : DecidableRel (α := Message α) (·<·) :=
+  fun m₁ m₂ ↦  by
+    simp
+    unfold LT.lt
+    simp [instLTMessage]
+    exact instDecidableOr
+
+instance Message.instDecidableLE [DecidableEq α] : DecidableRel (α := Message α) (·≤·) :=
+  fun m₁ m₂ ↦  by simp [LE.le]
+                  exact instDecidableOr
 
 structure MQ3 (α : Type 0) [instDec: DecidableEq α] (ctx : MQContext)
     extends MQ2 α ctx where
@@ -55,108 +189,40 @@ def MQ3.lift [DecidableEq α] (mq : MQ3 α ctx) : MQ2 α ctx :=
 
 @[simp]
 def MQ3.unlift [DecidableEq α] (_ : MQ3 α ctx) (amq' : MQ2 α ctx) : MQ3 α ctx :=
-  { queue := amq'.queue.insertionSort, clock := amq'.clock }
+  { queue := amq'.queue.insertionSort (·≤·), clock := amq'.clock }
 
-instance [instDec: DecidableEq α]: Machine MQContext (MQ2 α (instDec:=instDec) ctx) where
+instance [instDec: DecidableEq α]: Machine MQContext (MQ3 α (instDec:=instDec) ctx) where
   context := ctx
   invariant mq := mq.queue.length ≤ ctx.maxCount
                   ∧ (∀ msg ∈ mq.queue, msg.timestamp < mq.clock)
                   ∧ (∀ msg₁ ∈ mq.queue, ∀ msg₂ ∈ mq.queue, msg₁.timestamp = msg₂.timestamp → msg₁ = msg₂)
                   ∧ (∀ msg ∈ mq.queue, ctx.minPrio ≤ msg.prio ∧ msg.prio ≤ ctx.maxPrio)
                   ∧ mq.queue.Nodup
+                  ∧ mq.queue.Sorted (·≤·)
   reset := { queue := [], clock := 0}
 
-theorem List_Finset_dedup_prop [DecidableEq α] (xs : List α):
-  xs.length = xs.toFinset.card
-  → xs = xs.dedup :=
-by
-  intro Hlen
-  induction xs
-  case nil =>
-    simp
-  case cons x xs Hind =>
-    simp at Hlen
-    by_cases x ∈ xs
-    case pos Hpos =>
-      have Hpos' : x ∈ xs.toFinset := by exact List.mem_toFinset.mpr Hpos
-      simp [Hpos'] at Hlen
-      simp [Hpos]
-      have Hineq: xs.toFinset.card ≤ xs.length := by
-        exact List.toFinset_card_le xs
-      rw [←Hlen] at Hineq
-      have Hcontra: ¬ (xs.length + 1 ≤ xs.length) := by
-        exact Nat.not_succ_le_self xs.length
-      contradiction
-    case neg Hneg =>
-      simp [Hneg] at Hlen
-      simp [Hneg]
-      apply Hind
-      · exact Hlen
-
-theorem List_Finset_Nodup_prop [DecidableEq α] (xs : List α):
-  xs.length = xs.toFinset.card
-  → xs.Nodup :=
-by
-  intro Hlen
-  have Hdedup: xs = xs.dedup := by
-    exact List_Finset_dedup_prop xs Hlen
-  rw [Hdedup]
-  exact List.nodup_dedup xs
-
-theorem List_Nodup_extension [DecidableEq α] (xs : List α):
-  xs.Nodup → ∀ x ∈ xs, ∀ y ∈ xs.erase x, y ≠ x :=
-by
-  intro Hnd
-  induction xs
-  case nil => simp
-  case cons z xs Hind =>
-    simp at Hnd
-    obtain ⟨Hz, Hnd⟩ := Hnd
-    simp [Hnd] at Hind
-    intros x Hx y Hy
-    by_cases z = x
-    case pos Hpos =>
-      simp [Hpos] at Hz
-      simp [Hpos] at Hy
-      exact ne_of_mem_of_not_mem Hy Hz
-    case neg Hneg =>
-      simp [Hneg] at Hx
-      simp [Hneg] at Hy
-      cases Hx
-      case inl Heq =>
-        simp [Heq] at Hneg
-      case inr Hneq =>
-        cases Hy
-        case inl Hy =>
-          exact ne_of_eq_of_ne Hy Hneg
-        case inr Hy =>
-          apply Hind <;> assumption
-
-theorem MQ2.nodup_erase [DecidableEq α] (mq : MQ2 α ctx):
-  mq.queue.length = mq.messages.card
-  → ∀ msg₁ ∈ mq.queue, ∀ msg₂ ∈ mq.queue.erase msg₁, msg₂ ≠ msg₁ :=
-by
-  intros Hsize
-  have Hnd: mq.queue.Nodup := by exact List_Finset_Nodup_prop mq.queue Hsize
-  intros msg₁ Hmsg₁ msg₂ Hmsg₂
-  exact List_Nodup_extension mq.queue Hnd msg₁ Hmsg₁ msg₂ Hmsg₂
-
-instance [instDec: DecidableEq α] : FRefinement (MQ1 α ctx) (MQ2 α ctx) where
-  lift := MQ2.lift
+instance [instDec: DecidableEq α] : SRefinement (MQ2 α ctx) (MQ3 α ctx) where
+  lift := MQ3.lift
   lift_safe mq := by
     simp [Machine.invariant]
-    intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅
+    intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆
+    simp [*]
     constructor
-    · have H : mq.queue.toFinset.card ≤ mq.queue.length := by
-        exact List.toFinset_card_le mq.queue
-      exact Nat.le_trans H Hinv₁
+    · apply Hinv₂
     constructor
-    · intros msg Hmsg ; exact Hinv₂ msg Hmsg
-    constructor
-    · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
-      exact Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
-    · intros msg Hmsg
-      exact Hinv₄ msg Hmsg
+    · apply Hinv₃
+    · apply Hinv₄
+
+  unlift := MQ3.unlift
+
+  lu_reset am' := by
+    intros Hinv
+    simp [Machine.reset]
+    -- equality of state after lift/unlift is too demanding
+    -- Solution 1 : introduce a separate notion of "state equality"
+    --              (e.g. here MQ1/MQ2 accept permutations of messages)
+    -- Solution 2 : relax the requirement ?
+    sorry
 
 def MQ2.Init [instDec: DecidableEq α] : InitREvent (MQ1 α ctx) (MQ2 α ctx) Unit Unit :=
   newInitREvent'' MQ1.Init.toInitEvent {
