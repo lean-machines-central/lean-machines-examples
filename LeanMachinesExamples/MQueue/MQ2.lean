@@ -524,7 +524,7 @@ def MQ2.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
       exists msg
       simp [Hmsg, Hy, Hpy, Hclk]
       constructor
-      · sorry
+      · exact List_erase_Finset_Nodup mq.queue msg Hinv₅
       · intros msg Hmsg Hneq
         exact Hprio msg Hmsg Hneq
 
