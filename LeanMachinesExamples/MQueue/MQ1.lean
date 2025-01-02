@@ -52,6 +52,14 @@ instance [instDec: DecidableEq α]: Machine MQContext (MQ1 α (instDec:=instDec)
                   ∧ (∀ msg ∈ mq.messages, ctx.minPrio ≤ msg.prio ∧ msg.prio ≤ ctx.maxPrio)
   reset := { messages := ∅, clock := 0}
 
+theorem MQ1.clock_free [DecidableEq α] (mq : MQ1 α ctx):
+  Machine.invariant mq → ∀ x, ∀ p, ⟨⟨x, mq.clock⟩, p⟩ ∉ mq.messages :=
+by
+  simp [Machine.invariant]
+  intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ x p Hin
+  have Hinv₂' := Hinv₂ ⟨⟨x, mq.clock⟩, p⟩ Hin
+  simp at Hinv₂' -- contradiction
+
 instance [instDec: DecidableEq α] : FRefinement (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) where
   lift := MQ1.lift
   lift_safe mq := by
@@ -76,20 +84,22 @@ def MQ1.Enqueue [DecidableEq α] : OrdinaryREvent (MQ0 α ctx.toBoundedCtx) (MQ1
   newFREvent' MQ0.Enqueue.toOrdinaryEvent {
     lift_in := fun (x, _) => x
     guard := fun mq (x, px) => mq.messages.card < ctx.maxCount
-                               ∧ (∀ msg ∈ mq.messages, msg.timestamp ≠ mq.clock)
                                ∧ ctx.minPrio ≤ px ∧ px ≤ ctx.maxPrio
     action := fun mq (x, px) =>
                 { messages := mq.messages ∪ {⟨⟨x, mq.clock⟩, px⟩},
                   clock := mq.clock + 1 }
 
     safety := fun mq (x, px) => by
+      intro Hinv
+      have Hclk := MQ1.clock_free mq Hinv
+      revert Hinv
       simp [Machine.invariant]
-      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd₁ Hgrd₂ Hgrd₃ Hgrd₄
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd₁ Hgrd₂ Hgrd₃
       constructor
       · have Hcard : (mq.messages ∪ {⟨⟨x, mq.clock⟩, px⟩}).card = mq.messages.card + 1 := by
           apply Finset_notElem_card
           intro Hcontra
-          exact Hgrd₂ { payload := x, timestamp := mq.clock, prio := px } Hcontra rfl
+          exact Hclk x px Hcontra
         rw [Hcard]
         exact Hgrd₁
       constructor
@@ -139,21 +149,16 @@ def MQ1.Enqueue [DecidableEq α] : OrdinaryREvent (MQ0 α ctx.toBoundedCtx) (MQ1
           exact Hinv₄ msg Hmsg
         case _ Hmsg =>
           simp [Hmsg]
-          exact ⟨Hgrd₃, Hgrd₄⟩
+          exact ⟨Hgrd₂, Hgrd₃⟩
 
     strengthening := fun mq (x, px) => by
       simp [Machine.invariant, FRefinement.lift, MQ0.Enqueue]
-      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd₁ Hgrd₂ Hgrd₃ Hgrd₄
-      constructor
-      · exact Hgrd₁
-      · intros msg Hmsg Hcontra
-        have Hclk : msg.timestamp < mq.clock := by
-          exact Hinv₂ msg Hmsg
-        simp [Hcontra] at Hclk
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd₁ Hgrd₂ Hgrd₃
+      exact Hgrd₁
 
     simulation := fun mq (x, px) => by
       simp [Machine.invariant, FRefinement.lift, MQ0.Enqueue]
-      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd₁ Hgrd₂ Hgrd₃ Hgrd₄
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd₁ Hgrd₂ Hgrd₃
       simp [Finset.map_union]
 
   }
