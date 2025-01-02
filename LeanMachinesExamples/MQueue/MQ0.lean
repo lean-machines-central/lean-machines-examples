@@ -39,6 +39,14 @@ instance [instDec: DecidableEq α]: Machine BoundedCtx (MQ0 α (instDec:=instDec
                   ∧ (∀ msg₁ ∈ mq.messages, ∀ msg₂ ∈ mq.messages, msg₁.timestamp = msg₂.timestamp → msg₁ = msg₂)
   reset := { messages := ∅, clock := 0}
 
+theorem MQ0.clock_free [DecidableEq α] (mq : MQ0 α ctx):
+  Machine.invariant mq → ∀ x, ⟨x, mq.clock⟩ ∉ mq.messages :=
+by
+  simp [Machine.invariant]
+  intros Hinv₁ Hinv₂ Hinv₃ x Hin
+  have Hinv₂' := Hinv₂ {payload := x, timestamp := mq.clock} Hin
+  simp at Hinv₂' -- contradiction
+
 instance [instDec: DecidableEq α] : FRefinement (Bounded ctx) (MQ0 α ctx) where
   lift mq := { count := mq.messages.card }
   lift_safe mq := by simp [Machine.invariant] ; intros H _ _ ; exact H
@@ -69,16 +77,20 @@ by
 def MQ0.Enqueue [DecidableEq α] : OrdinaryREvent (Bounded ctx) (MQ0 α ctx) α Unit Unit Unit :=
   newFREvent' Bounded.Incr {
     lift_in := fun _ => ()
-    guard mq x := mq.messages.card < ctx.maxCount ∧ ⟨x, mq.clock⟩ ∉ mq.messages
+    guard mq x := mq.messages.card < ctx.maxCount
     action mq x := { messages := mq.messages ∪ {⟨x, mq.clock⟩},
                      clock := mq.clock + 1 }
 
     safety mq x := by
+      intro Hinv
+      have Hclk := MQ0.clock_free mq Hinv
+      revert Hinv
       simp [Machine.invariant]
-      intros Hinv₁ Hinv₂ Hinv₃ Hgrd₁ Hgrd₂
+      intros Hinv₁ Hinv₂ Hinv₃ Hgrd₁
       constructor
       · have Hcard : (mq.messages ∪ {⟨x, mq.clock⟩}).card = mq.messages.card + 1 := by
-          apply Finset_notElem_card ; assumption
+          apply Finset_notElem_card
+          exact Hclk x
         rw [Hcard]
         exact Hgrd₁
       constructor
@@ -124,16 +136,18 @@ def MQ0.Enqueue [DecidableEq α] : OrdinaryREvent (Bounded ctx) (MQ0 α ctx) α 
 
     strengthening mq x := by
       simp [Machine.invariant, FRefinement.lift, Incr]
-      intros _ _ _ Hgrd₁ _
-      exact Hgrd₁
 
     simulation mq x := by
+      intro Hinv
+      have Hclk := MQ0.clock_free mq Hinv
+      revert Hinv
       simp [Machine.invariant, FRefinement.lift, Incr]
-      intros Hinv₁ Hinv₂ Hinv₃ Hgrd₁ Hgrd₂
+      intros Hinv₁ Hinv₂ Hinv₃ Hgrd
       have Hcard : (mq.messages ∪ {⟨x, mq.clock⟩}).card = mq.messages.card + 1 := by
-          apply Finset_notElem_card ; exact Hgrd₂
-      rw [Hcard]
+          apply Finset_notElem_card
+          exact Hclk x
 
+      rw [Hcard]
   }
 
 theorem Finset_card_sdiff_le [DecidableEq α] (t s : Finset α):
