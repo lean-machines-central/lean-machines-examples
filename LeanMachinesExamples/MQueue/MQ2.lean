@@ -44,6 +44,14 @@ instance [instDec: DecidableEq α]: Machine MQContext (MQ2 α (instDec:=instDec)
                   ∧ mq.queue.Nodup
   reset := { queue := [], clock := 0}
 
+theorem MQ2.clock_free [DecidableEq α] (mq : MQ2 α ctx):
+  Machine.invariant mq → ∀ x, ∀ p, ⟨⟨x, mq.clock⟩, p⟩ ∉ mq.messages :=
+by
+  simp [Machine.invariant]
+  intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ x p Hin
+  have Hinv₂' := Hinv₂ ⟨⟨x, mq.clock⟩, p⟩ Hin
+  simp at Hinv₂' -- contradiction
+
 theorem List_Finset_dedup_prop [DecidableEq α] (xs : List α):
   xs.length = xs.toFinset.card
   → xs = xs.dedup :=
@@ -147,23 +155,18 @@ def MQ2.Init [instDec: DecidableEq α] : InitREvent (MQ1 α ctx) (MQ2 α ctx) Un
 @[local simp]
 def enqueue_guard [DecidableEq α] (mq : MQ2 α ctx) (params : α × Prio) : Prop :=
   mq.queue.length < ctx.maxCount
-  ∧ (∀ msg ∈ mq.queue, msg.timestamp ≠ mq.clock)
   ∧ ctx.minPrio ≤ params.2 ∧ params.2 ≤ ctx.maxPrio
 
 theorem enqueue_guard_strength [DecidableEq α] (mq : MQ2 α ctx) (params : α × Prio):
   enqueue_guard mq params → MQ1.Enqueue.guard mq.lift params :=
 by
   simp [MQ1.Enqueue]
-  intros Hgrd₁ Hgrd₂ Hgrd₃ Hgrd₄
+  intros Hgrd₁ Hgrd₂ Hgrd₃
   constructor
   · have H : mq.queue.toFinset.card ≤ mq.queue.length := by
       exact List.toFinset_card_le mq.queue
     exact Nat.lt_of_le_of_lt H Hgrd₁
-  constructor
-  · intros msg Hmsg
-    exact Hgrd₂ msg Hmsg
-  · exact ⟨Hgrd₃, Hgrd₄⟩
-
+  · exact ⟨Hgrd₂, Hgrd₃⟩
 
 @[local simp]
 def enqueue_action [DecidableEq α] (mq : MQ2 α ctx) (params : α × Prio) : MQ2 α ctx :=
@@ -183,7 +186,6 @@ by
 def MQ2.Enqueue [DecidableEq α]: OrdinaryREvent (MQ1 α ctx) (MQ2 α ctx) (α × Prio) Unit :=
   newFREvent' MQ1.Enqueue.toOrdinaryEvent {
     guard := fun mq (x, px) => mq.queue.length < ctx.maxCount
-                               ∧ (∀ msg ∈ mq.queue, msg.timestamp ≠ mq.clock)
                                ∧ ctx.minPrio ≤ px ∧ px ≤ ctx.maxPrio
 
     action := fun mq (x, px) =>
@@ -191,8 +193,11 @@ def MQ2.Enqueue [DecidableEq α]: OrdinaryREvent (MQ1 α ctx) (MQ2 α ctx) (α �
                   clock := mq.clock + 1 }
 
     safety := fun mq (x, px) => by
+      intro Hinv
+      have Hclk := MQ2.clock_free mq Hinv
+      revert Hinv
       simp [Machine.invariant]
-      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hgrd₁ Hgrd₂ Hgrd₃ Hgrd₄
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hgrd₁ Hgrd₂ Hgrd₃
       constructor
       · exact Hgrd₁
       constructor
@@ -207,16 +212,21 @@ def MQ2.Enqueue [DecidableEq α]: OrdinaryREvent (MQ1 α ctx) (MQ2 α ctx) (α �
       constructor
       constructor
       · intros msg Hmsg Hts
-        exact False.elim (Hgrd₂ msg Hmsg (id (Eq.symm Hts)))
+        have Hclk' := Hclk msg.payload msg.prio
+        simp [Hts] at Hclk'
+        contradiction
       · intros msg Hmsg
         constructor
         · intro Hts
-          exact False.elim (Hgrd₂ msg Hmsg Hts)
+          have Hclk' := Hclk msg.payload msg.prio
+          simp [←Hts] at Hclk'
+          have Hmsg' : msg ∈ mq.messages := by exact in_queue_in_messages mq msg Hmsg
+          contradiction
         · intros msg' Hmsg' Hts
           exact Hinv₃ msg Hmsg msg' Hmsg' Hts
       constructor
       constructor
-      · exact ⟨Hgrd₃, Hgrd₄⟩
+      · exact ⟨Hgrd₂, Hgrd₃⟩
       · intros msg Hmsg
         exact Hinv₄ msg Hmsg
       · simp [Hinv₅]
@@ -228,20 +238,17 @@ def MQ2.Enqueue [DecidableEq α]: OrdinaryREvent (MQ1 α ctx) (MQ2 α ctx) (α �
 
     strengthening := fun mq (x, px) => by
       simp [Machine.invariant, MQ1.Enqueue, FRefinement.lift]
-      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hgrd₁ Hgrd₂ Hgrd₃ Hgrd₄
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hgrd₁ Hgrd₂ Hgrd₃
       constructor
       · have H : mq.queue.toFinset.card ≤ mq.queue.length := by
           exact List.toFinset_card_le mq.queue
         exact Nat.lt_of_le_of_lt H Hgrd₁
-      constructor
-      · intros msg Hmsg
-        exact Hgrd₂ msg Hmsg
-      · exact ⟨Hgrd₃, Hgrd₄⟩
+      · exact ⟨Hgrd₂, Hgrd₃⟩
 
     simulation := fun mq (x, px) => by
       intro Hinv
       simp
-      intros Hgrd₁ Hgrd₂ Hgrd₃ Hgrd₄
+      intros Hgrd₁ Hgrd₂ Hgrd₃
       have Hlift : FRefinement.lift mq = mq.lift := by
         rfl
       rw [Hlift]
