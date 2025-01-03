@@ -8,6 +8,333 @@ open Bounded
 open Prioritized
 open Clocked
 
+abbrev MessageSig := Prio × Clock
+
+def Message.sig [DecidableEq α] (msg : Message α) : MessageSig := (msg.prio, msg.timestamp)
+
+instance: LT MessageSig where
+  lt := fun (p₁,c₁) (p₂,c₂) => (p₁ < p₂) ∨ (p₁ = p₂ ∧ c₁ < c₂)
+
+instance: DecidableRel (α:=MessageSig) (·<·) :=
+  fun (p₁, c₁) (p₂, c₂) => by
+    simp
+    unfold LT.lt
+    simp [instLTMessageSig]
+    exact instDecidableOr
+
+example: ((Prio.mk 2, Clock.mk 3) : MessageSig) < (Prio.mk 3, Clock.mk 2) := by
+  unfold LT.lt
+  simp [instLTMessageSig]
+
+example: decide (((Prio.mk 2, Clock.mk 3) : MessageSig) < (Prio.mk 3, Clock.mk 2)) = true := rfl
+
+theorem MessageSig_lt_prio (m₁ m₂ : MessageSig):
+  m₁.1 < m₂.1 → m₁ < m₂ :=
+by
+  intro Hlt
+  unfold LT.lt
+  simp [instLTMessageSig]
+  left
+  assumption
+
+theorem MessageSig_lt_clk (m₁ m₂ : MessageSig):
+  m₁.1 = m₂.1
+  → m₁.2 < m₂.2
+  → m₁ < m₂ :=
+by
+  intros Hple Hclt
+  unfold LT.lt
+  simp [instLTMessageSig]
+  right
+  exact ⟨Hple, Hclt⟩
+
+
+instance: LE MessageSig where
+  le := fun m₁ m₂ => (m₁ < m₂) ∨ (m₁ = m₂)
+
+example: ((Prio.mk 2, Clock.mk 3) : MessageSig) ≤ (Prio.mk 3, Clock.mk 2) := by
+  simp [LE.le]
+  unfold LT.lt
+  simp [instLTMessageSig]
+
+instance: DecidableRel (α:=MessageSig) (·≤·) :=
+  fun (p₁, c₁) (p₂, c₂) => by
+    simp
+    unfold LE.le
+    simp [instLEMessageSig]
+    exact instDecidableOr
+
+instance: Preorder MessageSig where
+  le_refl m := by
+    unfold LE.le
+    simp [instLEMessageSig]
+
+  le_trans m₁ m₂ m₃ := by
+    cases m₁
+    case mk p₁ c₁ =>
+    cases m₂
+    case mk p₂ c₂ =>
+    cases m₃
+    case mk p₃ c₃ =>
+      intros H₁ H₂
+      unfold LE.le at *
+      simp [instLEMessageSig] at *
+      cases H₁
+      case inl Hlt₁ =>
+        cases H₂
+        case inl Hlt₂ =>
+          left
+          unfold LT.lt at *
+          simp [instLTMessageSig] at *
+          cases Hlt₁
+          case inl Hlt₁ =>
+            cases Hlt₂
+            case inl Hlt₂ =>
+              left
+              exact lt_trans Hlt₁ Hlt₂
+            case inr Heq₂ =>
+              left
+              simp [Heq₂] at Hlt₁
+              assumption
+          case inr Heq₁ =>
+            cases Hlt₂
+            case inl Hlt₂ =>
+              left
+              simp [Heq₁]
+              assumption
+            case inr Heq₂ =>
+              right
+              simp [Heq₁, Heq₂]
+              apply lt_trans Heq₁.2 Heq₂.2
+        case inr Heq₁ =>
+          left
+          rw [←Heq₁.1,←Heq₁.2]
+          assumption
+      case inr Heq₁ =>
+        cases H₂
+        case inl Hlt₁ =>
+          left
+          simp [Heq₁]
+          assumption
+        case inr Heq₂ =>
+          right
+          simp [Heq₁,Heq₂]
+
+  lt_iff_le_not_le m₁ m₂ := by
+    constructor
+    case mp =>
+      intros H
+      cases m₁
+      case mk p₁ c₁ =>
+      cases m₂
+      case mk p₂ c₂ =>
+        unfold LE.le
+        simp [instLEMessageSig]
+        constructor
+        case left =>
+          left
+          assumption
+        case right =>
+          unfold LT.lt at *
+          simp [instLTMessageSig] at *
+          cases H
+          case inl H =>
+            constructor
+            case left =>
+              constructor
+              case left =>
+                exact le_of_lt H
+              case right =>
+                intro Heq
+                simp [Heq] at H
+            case right =>
+              intro Heq
+              simp [Heq] at H
+          case inr H =>
+            obtain ⟨H₁,H₂⟩ := H
+            constructor
+            constructor
+            · exact le_of_eq H₁
+            · intro Heq
+              exact le_of_lt H₂
+            · intro H
+              exact ne_of_gt H₂
+    case mpr =>
+      intro ⟨H₁,H₂⟩
+      cases m₁
+      case mk p₁ c₁ =>
+      cases m₂
+      case mk p₂ c₂ =>
+        unfold LT.lt
+        unfold LE.le at *
+        simp [instLTMessageSig, instLEMessageSig] at *
+        cases H₁
+        case inl H₁ =>
+          cases H₁
+          case inl H₁ =>
+            left
+            assumption
+          case inr H₁ =>
+            right
+            assumption
+        case inr H₁ =>
+          simp [H₁] at H₂
+
+instance: PartialOrder MessageSig where
+  le_antisymm m₁ m₂ := by
+    intros H₁ H₂
+    cases m₁
+    case mk p₁ c₁ =>
+    cases m₂
+    case mk p₂ c₂ =>
+      unfold LE.le at H₁
+      unfold LE.le at H₂
+      simp [Preorder.toLE, instPreorderMessageSig, instLEMessageSig] at *
+      cases H₁
+      case inl H₁ =>
+        cases H₂
+        case inl H₂ =>
+          unfold LT.lt at H₁
+          unfold LT.lt at H₂
+          simp [instLTMessageSig] at *
+          cases H₁
+          case inl H₁ =>
+            cases H₂
+            case inl H₂ =>
+              have Hcontra: ¬ (p₂ < p₁) := by exact not_lt_of_gt H₁
+              contradiction
+            case inr H₂ =>
+              simp [H₂] at H₁
+          case inr H₁ =>
+            cases H₂
+            case inl H₂ =>
+              simp [H₁] at H₂
+            case inr H₂ =>
+              have H₁' := H₁.2
+              have H₂' := H₂.2
+              have Hcontra : ¬ (c₂ < c₁) := by exact not_lt_of_gt H₁'
+              contradiction
+        case inr H₂ =>
+          simp [H₁, H₂]
+      case inr H₁ =>
+        simp [H₁]
+
+theorem MessageSig.le_total (m₁ m₂ : MessageSig):
+  m₁ ≤ m₂  ∨ m₂ ≤ m₁ :=
+by
+  simp [LE.le]
+  cases m₁ ; case mk p₁ c₁ =>
+  cases m₂ ; case mk p₂ c₂ =>
+    have Hptot := LinearOrder.le_total p₁ p₂
+    have Hctot := LinearOrder.le_total c₁ c₂
+    cases Hptot
+    case inl Hple =>
+      have Hple' : p₁ < p₂ ∨ p₁ = p₂ := by
+        exact Decidable.lt_or_eq_of_le Hple
+      cases Hple'
+      case inl Hplt =>
+        cases Hctot
+        case inl Hcle =>
+          have Hcle' : c₁ < c₂ ∨ c₁ = c₂ := by
+            exact Decidable.lt_or_eq_of_le Hcle
+          cases Hcle'
+          case inl Hclt =>
+            left ; left
+            exact MessageSig_lt_prio (p₁, c₁) (p₂, c₂) Hplt
+          case inr Hceq =>
+            simp [Hceq]
+            left
+            left
+            exact MessageSig_lt_prio (p₁, c₂) (p₂, c₂) Hplt
+        case inr Hcle =>
+          left
+          left
+          exact MessageSig_lt_prio (p₁, c₁) (p₂, c₂) Hplt
+      case inr Hpeq =>
+        simp [Hpeq]
+        unfold LT.lt
+        simp [instLTMessageSig]
+        cases Hctot
+        case inl Hcle =>
+          left
+          exact Decidable.lt_or_eq_of_le Hcle
+        case inr Hcle =>
+          right
+          exact Decidable.lt_or_eq_of_le Hcle
+    case inr Hple =>
+      have Hple' : p₂ < p₁ ∨ p₂ = p₁ := by
+        exact Decidable.lt_or_eq_of_le Hple
+      cases Hple'
+      case inl Hplt =>
+        cases Hctot
+        case inl Hcle =>
+          have Hcle' : c₁ < c₂ ∨ c₁ = c₂ := by
+            exact Decidable.lt_or_eq_of_le Hcle
+          cases Hcle'
+          case inl Hclt =>
+            right ; left
+            exact MessageSig_lt_prio (p₂, c₂) (p₁, c₁) Hplt
+          case inr Hceq =>
+            simp [Hceq]
+            right
+            left
+            exact MessageSig_lt_prio (p₂, c₂) (p₁, c₂) Hplt
+        case inr Hcle =>
+          right
+          left
+          exact MessageSig_lt_prio (p₂, c₂) (p₁, c₁) Hplt
+      case inr Hpeq =>
+        simp [Hpeq]
+        unfold LT.lt
+        simp [instLTMessageSig]
+        cases Hctot
+        case inl Hcle =>
+          left
+          exact Decidable.lt_or_eq_of_le Hcle
+        case inr Hcle =>
+          right
+          exact Decidable.lt_or_eq_of_le Hcle
+
+instance: Min MessageSig where
+  min := fun m₁ m₂ =>
+    if m₁ ≤ m₂ then m₁ else m₂
+
+instance: Max MessageSig where
+  max := fun m₁ m₂ =>
+    if m₁ < m₂ then m₂ else m₁
+
+instance: LinearOrder MessageSig where
+  le_total m₁ m₂ := by
+    exact MessageSig.le_total m₁ m₂
+
+  decidableLE m₁ m₂ := by
+    simp
+    unfold LE.le
+    simp [Preorder.toLE, PartialOrder.toPreorder, instPartialOrderMessageSig,
+          instPreorderMessageSig, instLEMessageSig]
+    exact instDecidableOr
+
+  min_def m₁ m₂ := by
+    unfold Min.min
+    simp [instMinMessageSig]
+
+  max_def m₁ m₂ := by
+    unfold Max.max
+    simp [instMaxMessageSig]
+    unfold LE.le
+    simp [Preorder.toLE, PartialOrder.toPreorder, instPartialOrderMessageSig,
+          instPreorderMessageSig, instLEMessageSig]
+    split
+    case isTrue H₁ =>
+      simp [H₁]
+    case isFalse H₁ =>
+      simp [H₁]
+      split
+      case isTrue H₂ =>
+        assumption
+      case isFalse H₂ =>
+        rfl
+
 instance [DecidableEq α]: LT (Message α) where
   lt m₁ m₂ := (m₁.prio < m₂.prio)
               ∨ (m₁.prio = m₂.prio ∧ m₁.timestamp < m₂.timestamp)
@@ -168,6 +495,10 @@ instance [DecidableEq α]: PartialOrder (Message α) where
 
 -- Remark : messages do not form a linear order since payload are not observed
 -- (the order is not total)
+/-
+(not_a_)theorem Message.LE_total [DecidableEq α] (x y : Message α):
+  x ≤ y ∨ y ≤ x
+-/
 
 instance Message.instDecidableLT [DecidableEq α] : DecidableRel (α := Message α) (·<·) :=
   fun m₁ m₂ ↦  by

@@ -131,7 +131,7 @@ by
   simp [H₁, H₂]
 
 theorem isPermutation_cons [DecidableEq α] (x : α) (xs ys : List α):
-  isPermutation xs ys → isPermutation (n::xs) (n::ys) :=
+  isPermutation xs ys → isPermutation (x::xs) (x::ys) :=
 by
   unfold isPermutation
   intro H
@@ -223,7 +223,7 @@ by
 
     case isFalse _ =>
       have H₁: isPermutation (y :: x :: ys) (y :: insertion x ys) := by
-        apply isPermutation_cons <;> assumption
+        apply isPermutation_cons ; assumption
 
       have H₂: isPermutation (x :: y :: ys) (y :: x :: ys) := by
         apply isPermutation_transpose ; apply isPermutation_refl
