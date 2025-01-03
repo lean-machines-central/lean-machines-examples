@@ -1,11 +1,26 @@
 
-import LeanMachinesExamples.MQueue.Comparable
+--import LeanMachinesExamples.MQueue.Comparable
+
+import Mathlib.Data.Finset.Dedup
 
 namespace Sorted
 
+instance: LawfulBEq Ordering where
+  eq_of_beq := by
+    intros a b
+    intro H
+    cases a <;> cases b <;>  simp_arith at *
+
+  rfl := by
+    intro a ; cases a <;> simp_arith
+
+theorem OrdSplit [Ord α] (x y : α):
+  compare x y = Ordering.gt ∨ compare x y = Ordering.lt ∨ compare x y = Ordering.eq :=
+by
+  cases (compare x y) <;> simp
 
 @[local simp]
-def isSorted [Comparable α]: List α → Bool
+def isSorted [Ord α]: List α → Bool
   | [] => true
   | [_] => true
   | n₁::n₂::ns => match compare n₁ n₂ with
@@ -15,7 +30,9 @@ def isSorted [Comparable α]: List α → Bool
 example: isSorted [4, 1, 2, 4, 3] = false := by  rfl
 example: isSorted [1, 2, 3, 4, 4] = true := by  rfl
 
-inductive Sorted [Comparable α]: List α → Prop where
+set_option linter.dupNamespace false
+
+inductive Sorted [Ord α]: List α → Prop where
   | empty: Sorted []
   | single (x : α): Sorted [x]
   | more (x₁ x₂ : α) (xs : List α):
@@ -27,7 +44,8 @@ example: Sorted [1, 2, 3, 4, 4] :=
 by
   repeat
     (constructor
-     · simp [compare, natCompare]
+     · --simp [compare, natCompare]
+       simp_arith [compare]
      )
   constructor
 
@@ -35,15 +53,15 @@ example: ¬ Sorted [4, 1, 2, 4, 3] :=
 by intro Hcontra
    cases Hcontra
    case more H₁ H₂ =>
-     simp_arith [compare] at H₁
+     simp_arith [compare]at H₁
 
-theorem Sorted_inv [Comparable α] (x : α) (xs : List α):
+theorem Sorted_inv [Ord α] (x : α) (xs : List α):
   Sorted (x :: xs) → Sorted xs :=
 by
   intros H
   cases H <;> (first | constructor | assumption)
 
-theorem isSorted_inv [Comparable α] (x : α) (xs : List α):
+theorem isSorted_inv [Ord α] (x : α) (xs : List α):
   isSorted (x :: xs) = true → isSorted xs = true:=
 by
   intro H
@@ -51,14 +69,13 @@ by
   case nil => simp
   case cons y ys =>
     simp at H
-    have Hcmp := ComparableSplit x y
+    have Hcmp := OrdSplit x y
     cases Hcmp
     case inl Hgt => simp [Hgt] at H
     case inr Hcmp =>
       cases Hcmp <;> simp [*] at H <;> assumption
-  done
 
-theorem Sorted_isSorted [Comparable α] (xs : List α):
+theorem Sorted_isSorted [Ord α] (xs : List α):
   Sorted xs → isSorted xs = true :=
 by
   intro H
@@ -71,9 +88,8 @@ by
     case h_1 Heq => rw [Heq] at H₁
                     cases H₁ <;> contradiction
     · assumption
-  done
 
-theorem isSorted_Sorted [Comparable α] (xs : List α):
+theorem isSorted_Sorted [Ord α] (xs : List α):
   isSorted xs = true → Sorted xs :=
 by
   intro H ; induction xs
@@ -84,184 +100,242 @@ by
     case cons y ys =>
       constructor
       · simp at H
-        have Hcmp: _ := ComparableSplit x y
+        have Hcmp: _ := OrdSplit x y
         cases Hcmp
         case a.inl Hcmp => rw [Hcmp] at H ; contradiction
         case a.inr Hcmp => assumption
       · apply Hind
         apply isSorted_inv (x:=x) (xs:=y::ys) ; assumption
-  done
+
+def isPermutation [DecidableEq α] (xs ys : List α) : Prop :=
+  xs.toFinset = ys.toFinset
+
+theorem isPermutation_refl [DecidableEq α] (xs : List α):
+  isPermutation xs xs :=
+by
+   simp [isPermutation]
+
+theorem isPermutation_sym [DecidableEq α] (xs ys: List α):
+  isPermutation xs ys → isPermutation ys xs :=
+by
+  simp [isPermutation]
+  intro H
+  simp [H]
+
+theorem isPermutation_trans [DecidableEq α] (xs ys zs : List α):
+  isPermutation xs ys → isPermutation ys zs
+  → isPermutation xs zs :=
+by
+  simp [isPermutation]
+  intros H₁ H₂
+  simp [H₁, H₂]
+
+theorem isPermutation_cons [DecidableEq α] (x : α) (xs ys : List α):
+  isPermutation xs ys → isPermutation (n::xs) (n::ys) :=
+by
+  unfold isPermutation
+  intro H
+  refine List.toFinset.ext ?_
+  intro x
+  constructor
+  · simp
+    intro H₂
+    cases H₂
+    case _ Heq =>
+      left ; assumption
+    case _ Hin =>
+      right
+      have Hin' : x ∈ xs.toFinset := by exact List.mem_toFinset.mpr Hin
+      rw [H] at Hin'
+      exact List.mem_dedup.mp Hin'
+  · simp
+    intro H₂
+    cases H₂
+    case _ Heq =>
+      left ; assumption
+    case _ Hin =>
+      right
+      have Hin' : x ∈ ys.toFinset := by exact List.mem_toFinset.mpr Hin
+      rw [←H] at Hin'
+      exact List.mem_dedup.mp Hin'
+
+theorem isPermutation_transpose [DecidableEq α] (x y : α) (xs ys : List α):
+  isPermutation xs ys
+  → isPermutation (x::y::xs) (y::x::ys) :=
+by
+  unfold isPermutation
+  intro Heq
+  refine List.toFinset.ext ?_
+  intro a
+  constructor
+  case mp =>
+    simp
+    intro Hin
+    cases Hin
+    case inl Heq =>
+      simp [Heq]
+    case inr Hin =>
+      cases Hin
+      case inl Heq =>
+        simp [Heq]
+      case inr Hin =>
+        right ; right
+        have Hin' : a ∈ xs.toFinset := by exact List.mem_toFinset.mpr Hin
+        rw [Heq] at Hin'
+        exact List.mem_dedup.mp Hin'
+  case mpr =>
+    simp
+    intro Hin
+    cases Hin
+    case inl Heq =>
+      simp [Heq]
+    case inr Hin =>
+      cases Hin
+      case inl Heq =>
+        simp [Heq]
+      case inr Hin =>
+        right ; right
+        have Hin' : a ∈ ys.toFinset := by exact List.mem_toFinset.mpr Hin
+        rw [←Heq] at Hin'
+        exact List.mem_dedup.mp Hin'
 
 @[local simp]
-def nbOcc [Comparable α] (x : α) (xs : List α) : Nat :=
+def insertion [Ord α] (x : α) (xs : List α) : List α :=
   match xs with
-  | [] => 0
-  | y :: ys => match compare y x with
-               | Ordering.eq => Nat.succ (nbOcc x ys)
-               | _ => nbOcc x ys
+  | [] => [x]
+  | y::ys => if compare x y == Ordering.lt
+             then x :: y :: ys
+             else y :: insertion x ys
 
-example: nbOcc 3 [3, 7, 3, 4] = 2 := by rfl
-example: nbOcc 6 [3, 7, 3, 4] = 0 := by rfl
+example: insertion 3 [1, 2, 4, 6] = [1, 2, 3, 4, 6] := by rfl
+example: insertion 3 [4, 7, 9] = [3, 4, 7, 9] := by rfl
+example: insertion 3 [3,4,6] = [3, 3, 4, 6] := by rfl
 
-theorem nbOcc_zero_cons [Comparable α] (x : α):
-  nbOcc x (y :: ys) = 0
-  -> x ≠ y :=
+theorem insertion_perm [Ord α] [DecidableEq α] (x : α) (xs : List α):
+  isPermutation (x::xs) (insertion x xs) :=
 by
-  simp
-  split
-  · simp
-  case h_2 Hneq =>
-    intros Hnb Heq
-    rw [Heq] at Hneq
-    rw [Comparable.compare_refl] at Hneq
-    contradiction
-
-theorem nbOcc_zero_cons_rest [Comparable α] (x : α):
-  nbOcc x (y :: ys) = 0
-  -> nbOcc x ys = 0 :=
-by
-  intro Hnb
-  have Hneq: x ≠ y := by apply nbOcc_zero_cons ; assumption
-  simp [nbOcc] at Hnb
-  have Hneq': compare y x ≠ Ordering.eq := by
-    have Hneq': compare x y ≠ Ordering.eq := by
-      apply Comparable_neq_neq_complete
-      assumption
-    intro Heq
-    have Hcontra: compare x y = Ordering.eq := by
-      apply Comparable.compare_eq_sym ; assumption
-    contradiction
-  simp [Hneq'] at Hnb
-  assumption
-
-theorem nbOcc_Zero_notMem [Comparable α] (x : α) (xs : List α):
-  ¬ List.Mem x xs
-  → nbOcc x xs = 0 :=
-by
-  intro Hmem
   induction xs
-  case nil => simp
-  case cons x y ys Hind =>
-    simp_arith
+  case nil => simp [insertion, isPermutation]
+  case cons y ys Hind =>
+    simp [insertion] at *
     split
-    case h_1 Heq =>
-      simp
-      apply Hmem
-      have Hxy: y = x := by
-        apply Comparable.compare_eq_eq
+    case isTrue _ => apply isPermutation_refl
+
+    case isFalse _ =>
+      have H₁: isPermutation (y :: x :: ys) (y :: insertion x ys) := by
+        apply isPermutation_cons <;> assumption
+
+      have H₂: isPermutation (x :: y :: ys) (y :: x :: ys) := by
+        apply isPermutation_transpose ; apply isPermutation_refl
+
+      apply isPermutation_trans (ys:=y :: x :: ys) <;> assumption
+
+theorem isSorted_cons [Ord α] (x y : α) (xs : List α):
+  compare x y = Ordering.lt
+  → isSorted (y::xs)
+  → isSorted (x::y::xs) :=
+by
+  intro Hcmp
+  simp [Hcmp]
+
+theorem Sorted_cons [Ord α] (x y : α) (xs : List α):
+  compare x y = Ordering.lt
+  → Sorted (y::xs)
+  → Sorted (x::y::xs) :=
+by
+  intros Hcmp Hsort
+  refine isSorted_Sorted (x :: y :: xs) ?_
+  refine isSorted_cons x y xs Hcmp ?_
+  exact Sorted_isSorted (y :: xs) Hsort
+
+theorem insertion_Sorted [Ord α] (x : α) (xs : List α):
+  Sorted xs → Sorted (insertion x xs) :=
+by
+  intro Hsort
+  induction Hsort
+  case empty =>
+    simp
+    constructor
+  case single x y =>
+    simp
+    split
+    case isTrue Hlt =>
+      constructor
+      · left
+        apply eq_of_beq
+        simp [Hlt]
+      · constructor
+    case isFalse Hnlt =>
+      constructor
+      · have Hsplit := OrdSplit y x
+        cases Hsplit
+        case _ Hgt =>
+          -- need symmetric cases for compare  (hence Comparable)
+          sorry
+        case _ Hngt =>
+          assumption
+      · constructor
+  case more x₁ x₂ ys Hcmp Hsort Hind =>
+    cases Hcmp
+    case inl Hlt =>
+      simp at *
+      by_cases compare x x₁ = Ordering.lt
+      case pos Hlt₁ =>
+        simp [Hlt₁]
+        have Htrans: compare x x₂ = Ordering.lt := by
+          -- need transitivity
+          sorry
+        simp [Htrans] at Hind
+        refine Sorted_cons x x₁ (x₂ :: ys) Hlt₁ ?_
+        exact Sorted_cons x₁ x₂ ys Hlt Hsort
+      case neg Hnlt₁ =>
+        simp [Hnlt₁]
+        by_cases compare x x₂ = Ordering.lt
+        case pos Hlt₂ =>
+          simp [Hlt₂]
+          simp [Hlt₂] at Hind
+          refine Sorted.more x₁ x (x₂ :: ys) ?_ Hind
+          have Hneglt: ¬ (compare x x₁ = Ordering.lt) → (compare x₁ x = Ordering.lt ∨ compare x₁ x = Ordering.eq) := by
+            -- need some form of completeness
+            sorry
+          simp [Hnlt₁] at Hneglt
+          assumption
+        case neg Hnlt₂ =>
+          simp [Hnlt₂]
+          simp [Hnlt₂] at Hind
+          exact Sorted_cons x₁ x₂ (insertion x ys) Hlt Hind
+    case inr Heq =>
+      simp at *
+      by_cases compare x x₂ = Ordering.lt
+      case pos Hlt =>
+        simp [Hlt]
+        simp [Hlt] at Hind
+        have Htrans: compare x x₁ = Ordering.lt := by
+          -- need a kind of transitivity
+          sorry
+        simp [Htrans]
+        refine Sorted_cons x x₁ (x₂ :: ys) Htrans ?_
+        refine Sorted.more x₁ x₂ ys ?_ Hsort
+        simp [Heq]
+      case neg Hnlt =>
+        simp [Hnlt]
+        simp [Hnlt] at Hind
+        have Hnlt': ¬ compare x x₁ = Ordering.lt := by
+          -- need a kind of subtitution
+          sorry
+        simp [Hnlt']
+        refine Sorted.more x₁ x₂ (insertion x ys) ?_ Hind
+        right
         assumption
-      rw [Hxy]
-      constructor
-    case h_2 Hneq =>
-      apply Hind
-      intro Hmem'
-      apply Hmem
-      constructor
-      assumption
-  done
 
-theorem nbOcc_notMem_Zero [Comparable α] (x : α) (xs : List α):
-  nbOcc x xs = 0
-  →  ¬ List.Mem x xs :=
+
+theorem insertion_sorted [Ord α] (x : α) (xs : List α):
+  isSorted xs → isSorted (insertion x xs) :=
 by
-  intro Hnb
-  induction xs
-  case nil =>
-    intro Hcontra
-    cases Hcontra
-  case cons y xs Hind =>
-    intro Hcontra
-    cases Hcontra
-    case head =>
-      simp [nbOcc, Comparable.compare_refl] at Hnb
-    case tail H1 =>
-      apply Hind
-      · apply nbOcc_zero_cons_rest ; assumption
-      · assumption
-
-
-theorem nbOcc_Mem_ne_Zero [Comparable α] (x : α) (xs : List α):
-  nbOcc x xs ≠ 0
-  → List.Mem x xs :=
-by
-  induction xs
-  case nil => simp
-  case cons y xs Hind =>
-    intro H1
-    by_cases x = y
-    case pos Heq =>
-      rw [←Heq]
-      constructor
-    case neg Hneq =>
-      constructor
-      case a =>
-        apply Hind
-        simp at H1
-        have Hcmp := ComparableSplit y x
-        cases Hcmp
-        case inl Hgt =>
-          simp [Hgt] at H1
-          simp [H1]
-        case inr Hcmp =>
-          cases Hcmp
-          case inl Hlt =>
-            simp [Hlt] at H1
-            simp [H1]
-          case inr Heq =>
-            have Hcontra: y = x := by
-              apply Comparable.compare_eq_eq ; assumption
-            rw [Hcontra] at Hneq
-            contradiction
-  done
-
-theorem nbOcc_ne_zero [Comparable α] (x : α) (xs : List α):
-  List.Mem x xs
-  → nbOcc x xs ≠ 0 :=
-by
-  intro Hmem
-  intro Hnb
-  have Hcontra: ¬ List.Mem x xs := by
-    apply nbOcc_notMem_Zero ; assumption
-  contradiction
-
-theorem nbOcc_last_first [Comparable α] (x : α) (xs : List α):
-  nbOcc x (x :: xs) = 1
-  → nbOcc x xs = 0 :=
-by
-  simp [Comparable.compare_refl]
-
-def nbOcc_perm [Comparable α] (x y z : α) (xs : List α):
-  nbOcc x (y :: z :: xs) = nbOcc x (z :: y :: xs) :=
-by
-  cases xs
-  case nil =>
-    simp
-    by_cases compare y x = Ordering.eq
-    case pos Heq₁ =>
-      simp [Heq₁]
-      by_cases compare z x = Ordering.eq
-      case pos Heq₂ =>
-        simp [Heq₂]
-      case neg Hneq₂ =>
-        simp [Hneq₂]
-    case neg Hneq₁ =>
-      simp [Hneq₁]
-  case cons x' xs =>
-    simp
-    by_cases compare y x = Ordering.eq
-    case pos Heq₁ =>
-      simp [Heq₁]
-      by_cases compare z x = Ordering.eq
-      case pos Heq₂ =>
-        simp [Heq₂]
-      case neg Hneq₂ =>
-        simp [Hneq₂]
-    case neg Hneq₁ =>
-      simp [Hneq₁]
-  done
-
-def permutation [Comparable α] (xs ys : List α) : Prop :=
-  ∀ x : α, nbOcc x xs = nbOcc x ys
+  intro Hsort
+  refine Sorted_isSorted (insertion x xs) ?_
+  refine insertion_Sorted x xs ?_
+  exact isSorted_Sorted xs Hsort
 
 
 end Sorted

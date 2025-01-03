@@ -201,7 +201,20 @@ instance [instDec: DecidableEq α]: Machine MQContext (MQ3 α (instDec:=instDec)
                   ∧ mq.queue.Sorted (·≤·)
   reset := { queue := [], clock := 0}
 
-instance [instDec: DecidableEq α] : SRefinement (MQ2 α ctx) (MQ3 α ctx) where
+theorem MQ3.clock_free [DecidableEq α] (mq : MQ3 α ctx):
+  Machine.invariant mq → ∀ x, ∀ p, ⟨⟨x, mq.clock⟩, p⟩ ∉ mq.messages :=
+by
+  simp [Machine.invariant]
+  intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ x p Hin
+  have Hinv₂' := Hinv₂ ⟨⟨x, mq.clock⟩, p⟩ Hin
+  simp at Hinv₂' -- contradiction
+
+/- Remark : Strong refinement is not possible because equality of
+abstract state is too strong a requirement
+(one cannot recover the initial - arbibrary - ordering of the
+abstract event queue).
+-/
+instance [instDec: DecidableEq α] : FRefinement (MQ2 α ctx) (MQ3 α ctx) where
   lift := MQ3.lift
   lift_safe mq := by
     simp [Machine.invariant]
@@ -213,76 +226,45 @@ instance [instDec: DecidableEq α] : SRefinement (MQ2 α ctx) (MQ3 α ctx) where
     · apply Hinv₃
     · apply Hinv₄
 
-  unlift := MQ3.unlift
 
-  lu_reset am' := by
-    intros Hinv
-    simp [Machine.reset]
-    -- equality of state after lift/unlift is too demanding
-    -- Solution 1 : introduce a separate notion of "state equality"
-    --              (e.g. here MQ1/MQ2 accept permutations of messages)
-    -- Solution 2 : relax the requirement ?
-    sorry
-
-def MQ2.Init [instDec: DecidableEq α] : InitREvent (MQ1 α ctx) (MQ2 α ctx) Unit Unit :=
-  newInitREvent'' MQ1.Init.toInitEvent {
+def MQ3.Init [instDec: DecidableEq α] : InitREvent (MQ2 α ctx) (MQ3 α ctx) Unit Unit :=
+  newInitREvent'' MQ2.Init.toInitEvent {
     init := { queue := [], clock := 0}
     safety _ := by simp [Machine.invariant]
-    strengthening _ := by simp [Machine.invariant, MQ1.Init]
-    simulation _ := by simp [Machine.invariant, Refinement.refine, MQ1.Init, FRefinement.lift]
+    strengthening _ := by simp [Machine.invariant, MQ2.Init]
+    simulation _ := by simp [Machine.invariant, Refinement.refine, MQ2.Init, FRefinement.lift]
   }
 
 @[local simp]
-def enqueue_guard [DecidableEq α] (mq : MQ2 α ctx) (params : α × Prio) : Prop :=
+def MQ3.enqueue_guard [DecidableEq α] (mq : MQ3 α ctx) (params : α × Prio) : Prop :=
   mq.queue.length < ctx.maxCount
-  ∧ (∀ msg ∈ mq.queue, msg.timestamp ≠ mq.clock)
   ∧ ctx.minPrio ≤ params.2 ∧ params.2 ≤ ctx.maxPrio
 
-theorem enqueue_guard_strength [DecidableEq α] (mq : MQ2 α ctx) (params : α × Prio):
-  enqueue_guard mq params → MQ1.Enqueue.guard mq.lift params :=
+theorem MQ3.enqueue_guard_strength [DecidableEq α] (mq : MQ3 α ctx) (params : α × Prio):
+  MQ3.enqueue_guard mq params → MQ2.Enqueue.guard mq.lift params :=
 by
-  simp [MQ1.Enqueue]
-  intros Hgrd₁ Hgrd₂ Hgrd₃ Hgrd₄
-  constructor
-  · have H : mq.queue.toFinset.card ≤ mq.queue.length := by
-      exact List.toFinset_card_le mq.queue
-    exact Nat.lt_of_le_of_lt H Hgrd₁
-  constructor
-  · intros msg Hmsg
-    exact Hgrd₂ msg Hmsg
-  · exact ⟨Hgrd₃, Hgrd₄⟩
-
+  simp [MQ2.Enqueue, MQ3.enqueue_guard]
 
 @[local simp]
-def enqueue_action [DecidableEq α] (mq : MQ2 α ctx) (params : α × Prio) : MQ2 α ctx :=
-  { queue := ⟨⟨params.1, mq.clock⟩, params.2⟩ :: mq.queue,
+def MQ3.enqueue_action [DecidableEq α] (mq : MQ3 α ctx) (params : α × Prio) : MQ3 α ctx :=
+  { queue := mq.queue.orderedInsert (·≤·) ⟨⟨params.1, mq.clock⟩, params.2⟩,
                   clock := mq.clock + 1 }
 
-theorem enqueue_action_prop [DecidableEq α] (mq : MQ2 α ctx) (params : α × Prio):
-  (enqueue_action mq params).lift = ((MQ1.Enqueue.to_Event).action mq.lift params).2 :=
-by
-  simp [MQ1.Enqueue]
-  have Hre : mq.queue.toFinset = mq.messages := by
-    exact rfl
-  rw [Hre, ←lift_Messages]
-  simp [Finset.insert_eq, Finset.union_comm]
+def MQ3.Enqueue [DecidableEq α]: OrdinaryREvent (MQ2 α ctx) (MQ3 α ctx) (α × Prio) Unit :=
+  newFREvent' MQ2.Enqueue.toOrdinaryEvent {
+    guard := MQ3.enqueue_guard
 
-
-def MQ2.Enqueue [DecidableEq α]: OrdinaryREvent (MQ1 α ctx) (MQ2 α ctx) (α × Prio) Unit :=
-  newFREvent' MQ1.Enqueue.toOrdinaryEvent {
-    guard := fun mq (x, px) => mq.queue.length < ctx.maxCount
-                               ∧ (∀ msg ∈ mq.queue, msg.timestamp ≠ mq.clock)
-                               ∧ ctx.minPrio ≤ px ∧ px ≤ ctx.maxPrio
-
-    action := fun mq (x, px) =>
-                { queue := ⟨⟨x, mq.clock⟩, px⟩ :: mq.queue,
-                  clock := mq.clock + 1 }
+    action := MQ3.enqueue_action
 
     safety := fun mq (x, px) => by
-      simp [Machine.invariant]
-      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hgrd₁ Hgrd₂ Hgrd₃ Hgrd₄
+      intro Hinv
+      have Hclk := MQ3.clock_free mq Hinv
+      revert Hinv
+      simp [Machine.invariant, MQ3.enqueue_guard, MQ3.enqueue_action]
+      intro Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hgrd₁ Hgrd₂ Hgrd₃
       constructor
-      · exact Hgrd₁
+      · simp [@List.orderedInsert_length]
+        exact Hgrd₁
       constructor
       constructor
       · refine Clock_LT mq.clock (mq.clock + 1) ?_
@@ -295,19 +277,30 @@ def MQ2.Enqueue [DecidableEq α]: OrdinaryREvent (MQ1 α ctx) (MQ2 α ctx) (α �
       constructor
       constructor
       · intros msg Hmsg Hts
-        exact False.elim (Hgrd₂ msg Hmsg (id (Eq.symm Hts)))
+        simp [Hts]
+        have Hclk' := Hclk msg.payload msg.prio
+        simp [Hts] at Hclk'
+        contradiction
       · intros msg Hmsg
         constructor
         · intro Hts
-          exact False.elim (Hgrd₂ msg Hmsg Hts)
+          simp [←Hts]
+          have Hclk' := Hclk msg.payload msg.prio
+          simp [←Hts] at Hclk'
+          contradiction
         · intros msg' Hmsg' Hts
           exact Hinv₃ msg Hmsg msg' Hmsg' Hts
       constructor
       constructor
-      · exact ⟨Hgrd₃, Hgrd₄⟩
+      · exact ⟨Hgrd₂, Hgrd₃⟩
       · intros msg Hmsg
         exact Hinv₄ msg Hmsg
-      · simp [Hinv₅]
+      constructor
+      · sorry   -- need a result about  orderedInsert vs. NoDup
+      · refine
+        List.Sorted.orderedInsert { payload := x, timestamp := mq.clock, prio := px } mq.queue Hinv₆
+
+        simp [Hinv₆]
         intro Hcontra
         have Hinv₂' := Hinv₂ { payload := x, timestamp := mq.clock, prio := px } Hcontra
         simp at Hinv₂'

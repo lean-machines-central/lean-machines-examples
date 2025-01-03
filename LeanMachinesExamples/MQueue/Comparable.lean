@@ -1,3 +1,5 @@
+import Mathlib.Order.Defs.PartialOrder
+
 class Comparable (α : Type u) extends (Ord α) where
   --compare : α → α → Ordering
   compare_refl: ∀ x : α, compare x x = Ordering.eq
@@ -13,6 +15,10 @@ class Comparable (α : Type u) extends (Ord α) where
 
   compare_eq_eq:
     ∀ x y : α, compare x y = Ordering.eq → x = y
+
+  compare_lt_trans: ∀ x₁ x₂ x₃ : α,
+    compare x₁ x₂ = Ordering.lt → compare x₂ x₃ = Ordering.lt
+    → compare x₁ x₃ = Ordering.lt
 
 open Comparable
 
@@ -32,7 +38,6 @@ by
   apply Hneq
   apply compare_eq_eq
   assumption
-
 
 theorem Comparable_eq_eq_complete [Comparable α] (x y : α):
   x = y → compare x y = Ordering.eq :=
@@ -77,22 +82,6 @@ def natCompare_correct (m n : Nat) :
 by
   simp [natCompare, compare, compareOfLessAndEq]
 
-theorem ifTrue (p : Prop) [Decidable p] (e₁ e₂ : α):
-  p → (if p then e₁ else e₂) = e₁ :=
-by
-  intro Hp
-  split <;> rfl
-  done
-
-theorem ifFalse (p : Prop) [Decidable p] (e₁ e₂ : α):
-  ¬p → (if p then e₁ else e₂) = e₂ :=
-by
-  intro Hnp
-  split
-  · contradiction
-  · rfl
-  done
-
 theorem Nat_lt_of_not_lt_not_eq (m n : Nat):
   ¬m < n → m ≠ n → n < m :=
 by
@@ -103,7 +92,6 @@ by
   · intro Heq
     rw [Heq] at H₂
     contradiction
-  done
 
 theorem natCompareGt (m n : Nat):
   natCompare m n = Ordering.gt
@@ -117,7 +105,6 @@ by
     intro Hle
     have Hlt : m < n := by exact Nat.lt_of_le_of_ne Hle fun a => Hgt (id (Eq.symm a))
     simp [Hlt] at Hmn
-  done
 
 theorem natCompare_lt (m n : Nat):
   natCompare m n = Ordering.lt → m < n :=
@@ -132,7 +119,6 @@ by
     by_cases m = n
     case pos Hpos => simp [Hpos] at Hif
     case neg Hneg => simp [Hneg] at Hif
-  done
 
 theorem natCompare_gt (m n : Nat):
   natCompare m n = Ordering.gt → n < m :=
@@ -143,7 +129,6 @@ by
     assumption
   apply natCompare_lt
   · assumption
-  done
 
 theorem natCompare_eq (m n : Nat):
   natCompare m n = Ordering.eq → m = n :=
@@ -155,7 +140,6 @@ by
     split
     case isTrue H₂ => intros ; assumption
     case isFalse H₂ => intros ; contradiction
-  done
 
 theorem lt_natCompare (m n : Nat):
   m < n → natCompare m n = Ordering.lt :=
@@ -171,7 +155,6 @@ by
   intro Heq
   rw [Heq] at Hneq
   contradiction
-  done
 
 theorem gt_natCompare (m n : Nat):
   m > n → natCompare m n = Ordering.gt :=
@@ -191,9 +174,7 @@ by
       apply Nat_ne_sym
       · apply Nat.ne_of_lt
         · assumption
-    rw [ifFalse]
-    · simp [H₂]
-  done
+    simp [H₂]
 
 theorem eq_natCompare (m n : Nat):
   m = n → natCompare m n = Ordering.eq :=
@@ -204,18 +185,6 @@ theorem natCompareRefl (n : Nat):
   natCompare n n = Ordering.eq :=
 by
   simp [natCompare]
-
-theorem natCompareTrans (m n p : Nat):
-  natCompare m n = Ordering.eq
-  → natCompare n p = Ordering.eq
-  → natCompare m p = Ordering.eq :=
-by
-  intros H₁ H₂
-  apply eq_natCompare
-  have H₁': m = n := by apply natCompare_eq ; assumption
-  have H₂': n = p := by apply natCompare_eq ; assumption
-  simp [H₁', H₂']
-  done
 
 theorem  natCompare_gt_sym (x y : Nat):
     natCompare x y = Ordering.gt
@@ -250,7 +219,28 @@ by
   · split
     · intros ; assumption
     · simp
-  done
+
+theorem natCompare_eq_trans (m n p : Nat):
+  natCompare m n = Ordering.eq
+  → natCompare n p = Ordering.eq
+  → natCompare m p = Ordering.eq :=
+by
+  intros H₁ H₂
+  apply eq_natCompare
+  have H₁': m = n := by apply natCompare_eq ; assumption
+  have H₂': n = p := by apply natCompare_eq ; assumption
+  simp [H₁', H₂']
+
+theorem natCompare_lt_trans (x₁ x₂ x₃ : Nat):
+  natCompare x₁ x₂ = Ordering.lt
+  → natCompare x₂ x₃ = Ordering.lt
+  → natCompare x₁ x₃ = Ordering.lt :=
+by
+  intros H₁ H₂
+  apply lt_natCompare
+  have Hcmp₁ : x₁ < x₂ := by apply natCompare_lt ; assumption
+  have Hcmp₂ : x₂ < x₃ := by apply natCompare_lt ; assumption
+  apply Nat.lt_trans (m:=x₂) <;> assumption
 
 instance: Comparable Nat where
   compare := natCompare
@@ -259,6 +249,7 @@ instance: Comparable Nat where
   compare_lt_sym := natCompare_lt_sym
   compare_eq_sym := natCompare_eq_sym
   compare_eq_eq := natCompare_eq_eq
+  compare_lt_trans := natCompare_lt_trans
 
 theorem natCompareSplit (x y : Nat):
   natCompare x y = Ordering.gt ∨ natCompare x y = Ordering.lt ∨ natCompare x y = Ordering.eq :=
@@ -306,7 +297,6 @@ by
     case cons y ys =>
       apply Hind
       · apply Hind'
-  done
 
 theorem cmp_List_gt_sym_nil [Comparable α]:
   cmp_List ([]:List α) [] = Ordering.gt
@@ -346,7 +336,6 @@ by
                     simp [compare_eq_sym, Heq]
                     apply H1
                     assumption
-  done
 
 theorem cmp_List_gt_sym [Hcomp: Comparable α]:
   ∀ xs ys : List α,
@@ -396,7 +385,6 @@ by
                     simp [compare_eq_sym, Heq]
                     apply H1
                     assumption
-  done
 
 theorem cmp_List_lt_sym [Hcomp: Comparable α]:
   ∀ xs ys : List α,
@@ -447,7 +435,6 @@ by
                     simp [compare_eq_sym, Heq]
                     apply H1
                     assumption
-  done
 
 theorem cmp_List_eq_sym [Hcomp: Comparable α]:
   ∀ xs ys : List α,
@@ -488,7 +475,6 @@ by
           assumption
         · apply Hind
           assumption
-  done
 
 
 instance [Comparable α]: Comparable (List α) where
@@ -521,7 +507,6 @@ by
     have H4: n > m := by simp [Hinf]
     have H5: _ := Nat.not_le_of_gt H4
     contradiction
-  done
 
 theorem cmp_Char_gt_sym (x y : Char):
   cmp_Char x y = Ordering.gt → cmp_Char y x = Ordering.lt :=
@@ -544,7 +529,6 @@ by
         exact Char.val_ne_of_ne Hneg
       have Heq: x.val = y.val := by exact UInt32.le_antisymm Hle Hnlt
       contradiction
-  done
 
 theorem cmp_Char_lt_sym (x y : Char):
   cmp_Char x y = Ordering.lt → cmp_Char y x = Ordering.gt :=
@@ -570,7 +554,6 @@ by
     case isTrue Hgt => rfl
     case isFalse Hngt =>
       simp [Hngt] at H
-  done
 
 theorem cmp_Char_eq_sym (x y : Char):
   cmp_Char x y = Ordering.eq → cmp_Char y x = Ordering.eq :=
@@ -592,7 +575,6 @@ by
       split
       · contradiction
       · rfl
-  done
 
 -- Taken from mathlib
 --theorem Char.ofNat_toNat {c : Char} (h : isValidCharNat c.toNat) : Char.ofNat c.toNat = c := by
@@ -615,7 +597,6 @@ by
       simp [Char.instLT] at *
       simp [Char.lt] at *
       exact UInt32.le_antisymm Hngt Hnlt
-  done
 
 instance: Comparable Char where
   compare := cmp_Char
@@ -693,3 +674,18 @@ by
 instance : LawfulBEq Ordering where
   eq_of_beq := Ordering_eq_of_beq
   rfl := Ordering_rfl
+
+/-
+  Some connections with Mathlib
+-/
+
+instance [Comparable α]: Preorder α where
+  lt x y := compare x y = Ordering.lt
+  le x y := compare x y == Ordering.lt ∨ compare x y == Ordering.eq
+
+  le_refl x := by
+    simp [LE.le]
+    right
+    exact compare_refl x
+
+  le_trans x₁ x₂ x₃ := by
