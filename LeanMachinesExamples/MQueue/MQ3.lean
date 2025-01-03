@@ -336,8 +336,7 @@ instance: LinearOrder MessageSig where
         rfl
 
 instance [DecidableEq α]: LT (Message α) where
-  lt m₁ m₂ := (m₁.prio < m₂.prio)
-              ∨ (m₁.prio = m₂.prio ∧ m₁.timestamp < m₂.timestamp)
+  lt m₁ m₂ := m₁.sig < m₂.sig
 
 theorem Message_lift_lt_prio [DecidableEq α] (m₁ m₂ : Message α):
   m₁.prio < m₂.prio
@@ -495,21 +494,47 @@ instance [DecidableEq α]: PartialOrder (Message α) where
 
 -- Remark : messages do not form a linear order since payload are not observed
 -- (the order is not total)
-/-
-(not_a_)theorem Message.LE_total [DecidableEq α] (x y : Message α):
-  x ≤ y ∨ y ≤ x
--/
 
 instance Message.instDecidableLT [DecidableEq α] : DecidableRel (α := Message α) (·<·) :=
   fun m₁ m₂ ↦  by
     simp
     unfold LT.lt
     simp [instLTMessage]
-    exact instDecidableOr
+    apply instDecidableRelMessageSigLt
 
 instance Message.instDecidableLE [DecidableEq α] : DecidableRel (α := Message α) (·≤·) :=
-  fun m₁ m₂ ↦  by simp [LE.le]
-                  exact instDecidableOr
+  fun m₁ m₂ ↦  by
+    simp
+    unfold LE.le
+    simp [instLEMessage]
+    exact instDecidableOr
+
+theorem Message.sigLT [DecidableEq α] (m₁ m₂ : Message α):
+  m₁ < m₂ → m₁.sig < m₂.sig :=
+by
+  intro H
+  exact H
+
+theorem Message.sigLE [DecidableEq α] (m₁ m₂ : Message α):
+  m₁ ≤ m₂ → m₁.sig ≤ m₂.sig :=
+by
+  intro Hle
+  unfold LE.le at *
+  simp [instLEMessage] at Hle
+  simp [instLEMessageSig]
+  cases Hle
+  case inl Hlt =>
+    left
+    exact Hlt
+  case inr Heq =>
+    right
+    exact congrArg sig Heq
+
+theorem Message.sigLTconv [DecidableEq α] (m₁ m₂ : Message α):
+  m₁.sig < m₂.sig → m₁ < m₂ :=
+by
+  intro H
+  exact H
 
 structure MQ3 (α : Type 0) [instDec: DecidableEq α] (ctx : MQContext)
     extends MQ2 α ctx where
@@ -519,8 +544,16 @@ def MQ3.lift [DecidableEq α] (mq : MQ3 α ctx) : MQ2 α ctx :=
   mq.toMQ2
 
 @[simp]
-def MQ3.unlift [DecidableEq α] (_ : MQ3 α ctx) (amq' : MQ2 α ctx) : MQ3 α ctx :=
-  { queue := amq'.queue.insertionSort (·≤·), clock := amq'.clock }
+def MQ3.sigs [DecidableEq α] (mq : MQ3 α ctx) : List MessageSig :=
+  List.map Message.sig mq.queue
+
+theorem MQ3.not_sig_not_elem [DecidableEq α] (mq : MQ3 α ctx) (msg : Message α):
+  msg.sig ∉ mq.sigs → msg ∉ mq.queue :=
+by
+  simp
+  intros Hsig Hmsg
+  have Hsig' := Hsig msg Hmsg
+  contradiction
 
 instance [instDec: DecidableEq α]: Machine MQContext (MQ3 α (instDec:=instDec) ctx) where
   context := ctx
@@ -529,7 +562,7 @@ instance [instDec: DecidableEq α]: Machine MQContext (MQ3 α (instDec:=instDec)
                   ∧ (∀ msg₁ ∈ mq.queue, ∀ msg₂ ∈ mq.queue, msg₁.timestamp = msg₂.timestamp → msg₁ = msg₂)
                   ∧ (∀ msg ∈ mq.queue, ctx.minPrio ≤ msg.prio ∧ msg.prio ≤ ctx.maxPrio)
                   ∧ mq.queue.Nodup
-                  ∧ mq.queue.Sorted (·≤·)
+                  ∧ mq.sigs.Sorted (·≤·)
   reset := { queue := [], clock := 0}
 
 theorem MQ3.clock_free [DecidableEq α] (mq : MQ3 α ctx):
@@ -540,12 +573,66 @@ by
   have Hinv₂' := Hinv₂ ⟨⟨x, mq.clock⟩, p⟩ Hin
   simp at Hinv₂' -- contradiction
 
+
+theorem List_perm_Nodup (xs ys : List α):
+  xs.Perm ys
+  → xs.Nodup
+  → ys.Nodup :=
+by
+  intros H₁ H₂
+  exact List.Perm.nodup H₁ H₂
+
+/-
+theorem List_perm_length (xs ys : List α):
+  xs.Perm ys
+  → xs.length = ys.length :=
+by
+  intro H
+  exact List.Perm.length_eq H
+-/
+
 /- Remark : Strong refinement is not possible because equality of
 abstract state is too strong a requirement
 (one cannot recover the initial - arbibrary - ordering of the
 abstract event queue).
+
+Functional refinement is also not possible because one cannot
+"reinvent" the order at the abstract level when lifting the concrete state
 -/
-instance [instDec: DecidableEq α] : FRefinement (MQ2 α ctx) (MQ3 α ctx) where
+instance [instDec: DecidableEq α] : Refinement (MQ2 α ctx) (MQ3 α ctx) where
+
+  refine (amq : MQ2 α ctx) (mq : MQ3 α ctx) :=
+    mq.queue.Perm amq.queue
+    ∧ mq.clock = amq.clock
+
+  refine_safe (amq : MQ2 α ctx) (mq : MQ3 α ctx) := by
+    simp [Machine.invariant]
+    intro Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Href₁ Href₂
+    constructor
+    · have Hlen : mq.queue.length = amq.queue.length := by
+        exact List.Perm.length_eq Href₁
+      exact le_of_eq_of_le (id (Eq.symm Hlen)) Hinv₁
+    constructor
+    · intros msg Hmsg
+      simp [←Href₂]
+      have Hin : msg ∈ mq.queue := by
+        exact (List.Perm.mem_iff (id (List.Perm.symm Href₁))).mp Hmsg
+      exact Hinv₂ msg Hin
+    constructor
+    · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
+      have Hin₁ : msg₁ ∈ mq.queue := by
+        exact (List.Perm.mem_iff (id (List.Perm.symm Href₁))).mp Hmsg₁
+      have Hin₂ : msg₂ ∈ mq.queue := by
+        exact (List.Perm.mem_iff (id (List.Perm.symm Href₁))).mp Hmsg₁
+      exact Hinv₃ msg₁ Hin₁ msg₂ Hin₂ Hts
+    constructor
+    · intros msg Hmsg
+      have Hin : msg ∈ mq.queue := by
+        exact (List.Perm.mem_iff (id (List.Perm.symm Href₁))).mp Hmsg
+      exact Hinv₄ msg Hin
+    · exact List_perm_Nodup mq.queue amq.queue Href₁ Hinv₅
+
+  /- Cannot lift : don't know how to restore the MQ2 ordering of messages
   lift := MQ3.lift
   lift_safe mq := by
     simp [Machine.invariant]
@@ -556,7 +643,7 @@ instance [instDec: DecidableEq α] : FRefinement (MQ2 α ctx) (MQ3 α ctx) where
     constructor
     · apply Hinv₃
     · apply Hinv₄
-
+  -/
 
 def MQ3.Init [instDec: DecidableEq α] : InitREvent (MQ2 α ctx) (MQ3 α ctx) Unit Unit :=
   newInitREvent'' MQ2.Init.toInitEvent {
@@ -581,8 +668,98 @@ def MQ3.enqueue_action [DecidableEq α] (mq : MQ3 α ctx) (params : α × Prio) 
   { queue := mq.queue.orderedInsert (·≤·) ⟨⟨params.1, mq.clock⟩, params.2⟩,
                   clock := mq.clock + 1 }
 
+theorem insertionSorted_Sorted (R : α → α → Prop) [DecidableRel R] [IsTotal α R] [IsTrans α R] (xs : List α):
+  xs.Sorted R → (xs.orderedInsert R x).Sorted R :=
+by
+  intro Hsort
+  refine List.Sorted.orderedInsert x xs Hsort
+
+theorem insertion_Map [DecidableEq α] (mqueue : List (Message α)) (x : Message α):
+  x.sig ∉ List.map Message.sig mqueue
+  → List.map Message.sig (mqueue.orderedInsert (·≤·) x) = (List.map Message.sig mqueue).orderedInsert (·≤·) x.sig :=
+by
+  intro Hnotin
+  refine
+    List.map_orderedInsert (fun x1 x2 => x1 ≤ x2) (fun x1 x2 => x1 ≤ x2) Message.sig mqueue x ?_ ?_
+  case _ =>
+    intro ms Hms
+    constructor
+    case mp =>
+      simp
+      intro H
+      exact Message.sigLE ms x H
+    case mpr =>
+      simp
+      have Hin : ms.sig ∈ List.map Message.sig mqueue := by
+        exact List.mem_map_of_mem Message.sig Hms
+      have Hneq : ms.sig ≠ x.sig := by
+        exact ne_of_mem_of_not_mem Hin Hnotin
+      unfold LE.le
+      simp [instLEMessageSig, instLEMessage]
+      intro Hsig
+      cases Hsig
+      case inl Hlt =>
+        left
+        exact Hlt
+      case inr Heqs =>
+        contradiction
+  case _ =>
+    intro ms Hms
+    simp
+    constructor
+    case mp =>
+      intro H
+      exact Message.sigLE x ms H
+    case mpr =>
+      have Hin : ms.sig ∈ List.map Message.sig mqueue := by
+        exact List.mem_map_of_mem Message.sig Hms
+      have Hneq : ms.sig ≠ x.sig := by
+        exact ne_of_mem_of_not_mem Hin Hnotin
+      unfold LE.le
+      simp [instLEMessageSig, instLEMessage]
+      intro Hsig
+      cases Hsig
+      case inl Hlt =>
+        left
+        exact Hlt
+      case inr Heqs =>
+        rw [Heqs] at Hneq
+        contradiction
+
+theorem MessageSig_orderedInsert_Sorted (sigs : List MessageSig):
+  sigs.Sorted (·≤·)
+  → (sigs.orderedInsert (·≤·) x).Sorted (·≤·) :=
+by
+  intro H
+  exact insertionSorted_Sorted (fun x1 x2 => x1 ≤ x2) sigs H
+
+theorem Sorted_NotIn (R : α → α → Prop) [DecidableRel R] (x y : α) (xs : List α):
+  y ≠ x → y ∉ xs → y ∉ List.orderedInsert R x xs :=
+by
+  intros Hneq Hnotin
+  rw [@List.mem_orderedInsert]
+  intro Hcontra
+  cases Hcontra <;> contradiction
+
+theorem Sorted_Nodup [DecidableEq α] (R : α → α → Prop) [DecidableRel R] (x : α) (xs : List α):
+  xs.Nodup → x ∉ xs → (List.orderedInsert R x xs).Nodup :=
+by
+  induction xs
+  case nil => simp
+  case cons y xs Hind =>
+    simp
+    intros Hy Hnd Hneq Hni
+    split
+    case isTrue HR =>
+      simp [Hneq, Hni, Hy, Hnd]
+    case isFalse HR =>
+      simp
+      simp [*]
+      intro Heq
+      simp [Heq] at Hneq
+
 def MQ3.Enqueue [DecidableEq α]: OrdinaryREvent (MQ2 α ctx) (MQ3 α ctx) (α × Prio) Unit :=
-  newFREvent' MQ2.Enqueue.toOrdinaryEvent {
+  newREvent' MQ2.Enqueue.toOrdinaryEvent {
     guard := MQ3.enqueue_guard
 
     action := MQ3.enqueue_action
@@ -627,39 +804,46 @@ def MQ3.Enqueue [DecidableEq α]: OrdinaryREvent (MQ2 α ctx) (MQ3 α ctx) (α �
       · intros msg Hmsg
         exact Hinv₄ msg Hmsg
       constructor
-      · sorry   -- need a result about  orderedInsert vs. NoDup
-      · refine
-        List.Sorted.orderedInsert { payload := x, timestamp := mq.clock, prio := px } mq.queue Hinv₆
-
-        simp [Hinv₆]
-        intro Hcontra
-        have Hinv₂' := Hinv₂ { payload := x, timestamp := mq.clock, prio := px } Hcontra
-        simp at Hinv₂'
-        exact Hgrd₂ { payload := x, timestamp := mq.clock, prio := px } Hcontra rfl
+      · have Hni : { payload := x, timestamp := mq.clock, prio := px } ∉ mq.messages := by
+            exact Hclk x px
+        have Hnotin : { payload := x, timestamp := mq.clock, prio := px } ∉ mq.queue := by
+          rw [← @List.mem_toFinset]
+          exact Hclk x px
+        apply Sorted_Nodup <;> assumption
+      · rw [insertion_Map]
+        · exact MessageSig_orderedInsert_Sorted (List.map Message.sig mq.queue) Hinv₆
+        · have Hdiff : ∀ msg : Message α, msg.timestamp = mq.clock → msg.sig ∉ mq.sigs := by
+            intros msg Hmsg
+            simp
+            intro msg' Hmsg'
+            have Hinv₂' := Hinv₂ msg' Hmsg'
+            simp [Message.sig]
+            intro Hp
+            rw [Hmsg]
+            intro Hcontra
+            simp [Hcontra] at Hinv₂'
+          apply Hdiff
+          simp
 
     lift_in := fun (x, px) => (x, px)
 
     strengthening := fun mq (x, px) => by
-      simp [Machine.invariant, MQ1.Enqueue, FRefinement.lift]
-      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hgrd₁ Hgrd₂ Hgrd₃ Hgrd₄
+      simp [Machine.invariant, MQ2.Enqueue, Refinement.refine, enqueue_guard]
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hgrd₁ Hgrd₂ Hgrd₃ amq Href₁ Href₂
       constructor
-      · have H : mq.queue.toFinset.card ≤ mq.queue.length := by
-          exact List.toFinset_card_le mq.queue
-        exact Nat.lt_of_le_of_lt H Hgrd₁
-      constructor
-      · intros msg Hmsg
-        exact Hgrd₂ msg Hmsg
-      · exact ⟨Hgrd₃, Hgrd₄⟩
+      · have Hlen : mq.queue.length = amq.queue.length := by
+          exact List.Perm.length_eq Href₁
+        rw [←Hlen]
+        exact Hgrd₁
+      · exact ⟨Hgrd₂, Hgrd₃⟩
 
     simulation := fun mq (x, px) => by
-      intro Hinv
-      simp
-      intros Hgrd₁ Hgrd₂ Hgrd₃ Hgrd₄
-      have Hlift : FRefinement.lift mq = mq.lift := by
-        rfl
-      rw [Hlift]
-      rw [←@enqueue_action_prop (mq:=mq) (params:=(x, px))]
-      exact rfl
+      simp [Machine.invariant, MQ2.Enqueue, MQ3.enqueue_guard, MQ3.enqueue_action, Refinement.refine]
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hgrd₁ Hgrd₂ Hgrd₃ amq Href₁ Href₂
+      constructor
+      · -- TODO : property about ordered insertion
+        sorry
+      · simp [Href₂]
   }
 
 def MQ2.priorities [DecidableEq α] (mq : MQ2 α ctx) : Finset Prio :=
