@@ -623,7 +623,7 @@ instance [instDec: DecidableEq α] : Refinement (MQ2 α ctx) (MQ3 α ctx) where
       have Hin₁ : msg₁ ∈ mq.queue := by
         exact (List.Perm.mem_iff (id (List.Perm.symm Href₁))).mp Hmsg₁
       have Hin₂ : msg₂ ∈ mq.queue := by
-        exact (List.Perm.mem_iff (id (List.Perm.symm Href₁))).mp Hmsg₁
+        exact (List.Perm.mem_iff (id (List.Perm.symm Href₁))).mp Hmsg₂
       exact Hinv₃ msg₁ Hin₁ msg₂ Hin₂ Hts
     constructor
     · intros msg Hmsg
@@ -758,6 +758,19 @@ by
       intro Heq
       simp [Heq] at Hneq
 
+theorem OrderedInsert_perm (R : α → α → Prop) [DecidableRel R] (x : α) (xs : List α):
+  (xs.orderedInsert R x).Perm (x::xs) :=
+by
+  exact List.perm_orderedInsert R x xs
+
+theorem Perm_trans (xs ys zs : List α):
+  xs.Perm ys → ys.Perm zs
+  → xs.Perm zs :=
+by
+  intros H₁ H₂
+  exact List.Perm.trans H₁ H₂
+
+
 def MQ3.Enqueue [DecidableEq α]: OrdinaryREvent (MQ2 α ctx) (MQ3 α ctx) (α × Prio) Unit :=
   newREvent' MQ2.Enqueue.toOrdinaryEvent {
     guard := MQ3.enqueue_guard
@@ -841,289 +854,147 @@ def MQ3.Enqueue [DecidableEq α]: OrdinaryREvent (MQ2 α ctx) (MQ3 α ctx) (α �
       simp [Machine.invariant, MQ2.Enqueue, MQ3.enqueue_guard, MQ3.enqueue_action, Refinement.refine]
       intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hgrd₁ Hgrd₂ Hgrd₃ amq Href₁ Href₂
       constructor
-      · -- TODO : property about ordered insertion
-        sorry
+      · rw [←Href₂]
+        apply List.Perm.trans (l₂:=({ payload := x, timestamp := mq.clock, prio := px } :: mq.queue))
+        · apply List.perm_orderedInsert
+        · exact List.Perm.cons { payload := x, timestamp := mq.clock, prio := px } Href₁
+
       · simp [Href₂]
   }
 
-def MQ2.priorities [DecidableEq α] (mq : MQ2 α ctx) : Finset Prio :=
+def MQ3.priorities [DecidableEq α] (mq : MQ3 α ctx) : Finset Prio :=
   mq.queue.foldl (fun ps msg => ps ∪ {msg.prio}) ∅
 
-theorem List_Finset_foldl_init [DecidableEq α] (xs: List α):
-  ∀ s : Finset α, List.foldl (fun t e => t ∪ {e}) s xs = s ∪ (List.foldl (fun t e => t ∪ {e}) ∅ xs) :=
-by
-  induction xs
-  case nil => simp
-  case cons x xs Hind =>
-    intro s
-    simp
-    rw [Hind]
-    rw [@Finset.union_assoc]
-    rw [← Hind]
-
-theorem List_Finset_foldl_map_init [DecidableEq α] [DecidableEq β] (xs: List α) (f : α → β):
-  ∀ s : Finset β, List.foldl (fun t e => t ∪ {f e}) s xs = s ∪ (List.foldl (fun t e => t ∪ {f e}) ∅ xs) :=
-by
-  induction xs
-  case nil => simp
-  case cons x xs Hind =>
-    intro s
-    simp
-    rw [Hind]
-    rw [@Finset.union_assoc]
-    rw [← Hind]
-
-theorem lift_Prios [DecidableEq α] (mq : MQ2 α ctx):
+theorem MQ3.lift_Prios [DecidableEq α] (mq : MQ3 α ctx):
   mq.lift.priorities = mq.priorities :=
 by
-  simp [MQ1.priorities, MQ2.priorities]
-  induction mq.queue
-  case nil => simp
-  case cons msg queue Hind =>
-    simp
-    rw [Hind]
-    rw [← @List_Finset_foldl_map_init]
+  simp [MQ2.priorities, MQ3.priorities]
 
-theorem MQ2_prios_in [DecidableEq α] (mq : MQ2 α ctx):
+theorem MQ3_prios_in [DecidableEq α] (mq : MQ3 α ctx):
   ∀ msg ∈ mq.messages, msg.prio ∈ mq.priorities :=
 by
-  have H := MQ1_prios_in mq.lift
-  rw [lift_Messages,lift_Prios] at H
+  have H := MQ2_prios_in mq.lift
+  rw [MQ3.lift_Prios] at H
   exact H
 
-def MQ2.maxPrio [DecidableEq α] (mq : MQ2 α ctx) : Prio :=
+theorem MQ3.queue_in [DecidableEq α] (mq : MQ3 α ctx) (msg : Message α):
+  msg ∈ mq.queue ↔ msg ∈ mq.lift.queue :=
+by
+  exact Eq.to_iff rfl
+
+def MQ3.maxPrio [DecidableEq α] (mq : MQ3 α ctx) : Prio :=
   mq.lift.maxPrio
 
-theorem MQ2.maxPrio_max [DecidableEq α] (mq : MQ2 α ctx) :
+theorem MQ3.maxPrio_max [DecidableEq α] (mq : MQ3 α ctx) :
   ∀ msg ∈ mq.queue, msg.prio ≤ mq.maxPrio :=
 by
+  have H : ∀ msg ∈ mq.lift.queue, msg.prio ≤ mq.lift.maxPrio := by
+    intros msg Hmsg
+    exact MQ2.maxPrio_max mq.lift msg Hmsg
   intros msg Hmsg
-  have Hmsg' : msg ∈ mq.messages := by exact in_queue_in_messages mq msg Hmsg
-  rw [←lift_Messages] at Hmsg'
-  apply MQ1.maxPrio_max ; assumption
+  exact H msg Hmsg
 
-theorem MQ2.maxPrio_in [DecidableEq α] (mq : MQ2 α ctx):
+theorem MQ3.maxPrio_in [DecidableEq α] (mq : MQ3 α ctx):
   Finset.Nonempty mq.priorities
   → mq.maxPrio ∈ mq.priorities :=
 by
   rw [← @lift_Prios]
-  apply MQ1.maxPrio_in
+  apply MQ2.maxPrio_in
 
-theorem MQ2.msgEx [DecidableEq α] (mq : MQ2 α ctx):
+theorem MQ3.msgEx [DecidableEq α] (mq : MQ3 α ctx):
   ∀ prio ∈ mq.priorities, ∃ msg ∈ mq.messages, msg.prio = prio :=
 by
   rw [← @lift_Prios, ← @lift_Messages]
-  apply MQ1.msgEx mq.lift
+  apply MQ2.msgEx mq.lift
 
-def MQ2.maxElemEx [DecidableEq α] (mq : MQ2 α ctx):
+def MQ3.maxElemEx [DecidableEq α] (mq : MQ3 α ctx):
   mq.queue ≠ []
   → ∃ msg ∈ mq.queue, msg.prio = mq.maxPrio :=
 by
   intro Hne
-  have Hne' : Finset.Nonempty mq.messages := by
-    simp
-    exact Hne
-  have Hlift := MQ1.maxElemEx mq.lift
-  rw [lift_Messages] at Hlift
-  have Hlift' := Hlift Hne'
+  have Hlift := MQ2.maxElemEx mq.lift
+  simp [lift_Messages] at Hlift
+  have Hlift' := Hlift Hne
   obtain ⟨msg, Hmsg, Hprio⟩ := Hlift'
   exists msg
-  constructor
-  · exact in_messages_in_queue mq msg Hmsg
-  · exact Hprio
 
-theorem Finset_sdiff_new_elem [DecidableEq α] (x x' : α) (s : Finset α):
-  x ≠ x' → x' ∈ s \ {x} → x' ∈ s :=
-by
-  intros Hneq Hx'
-  by_cases x' ∈ s
-  case pos Hpos =>
-    exact Hpos
-  case neg Hneg =>
-    have Hcontra: x' ∉ s \ {x} := by
-      exact Finset.not_mem_sdiff_of_not_mem_left Hneg
-    contradiction
+def errMessage {α : Type} [DecidableEq α] [Inhabited α] : Message α :=
+  {timestamp := Clock.mk 0, prio := Prio.mk 0, payload := default}
 
-theorem Finset_sdiff_elem [DecidableEq α] (x x' : α) (s : Finset α):
-  x' ∈ s → x' ∉ s \ {x} → x' = x :=
+theorem List_Nodeup_tail (xs : List α):
+  xs.Nodup → xs.tail.Nodup :=
 by
-  intros Hx'₁ Hx'₂
-  by_cases x' = x
-  case pos Hpos =>
-    exact Hpos
-  case neg Hneg =>
-    have Hcontra: x' ∈ s \ {x} := by
-      simp [Hx'₁, Hneg]
-    contradiction
-
-theorem Finset_sdiff_neq [DecidableEq α] (x x' : α) (s : Finset α):
-  x' ∈ s \ {x} → x' ≠ x :=
-by
-  intros Hx' Hneq
-  simp [Hneq] at Hx'
-
-theorem List_erase_in_prop [DecidableEq α] (xs : List α) (y : α):
-  ∀ x ∈ xs, x ∉ (xs.erase y) → x = y :=
-by
-  induction xs
+  intro Hxs
+  cases xs
   case nil => simp
-  case cons z xs Hind =>
-    simp
-    constructor
-    · intro Hz
-      simp [List.erase_cons] at Hz
-      by_cases z = y
-      case pos Hpos =>
-        assumption
-      case neg Hneg =>
-        simp [Hneg] at Hz
-    · intros a Ha
-      intro Ha'
-      apply Hind
-      · assumption
-      · simp [List.erase_cons] at Ha'
-        by_cases z = y
-        case pos Hpos =>
-          simp [Hpos] at Ha'
-          contradiction
-        case neg Hneg =>
-          simp [Hneg] at Ha'
-          simp [Ha']
+  case cons x xs =>
+    simp at Hxs
+    simp [Hxs]
 
-theorem List_nodup_erase_diff_prop [DecidableEq α] (xs : List α) (y : α):
-  xs.Nodup → x ∈ (xs.erase y) → x ≠ y :=
+theorem List_Perm_in (xs ys : List α):
+  xs.Perm ys
+  → ∀ x ∈ xs, x ∈ ys :=
 by
-  intro Hnd Hx
-  intro Heq
-  rw [←Heq] at Hx
-  have Hcontra: x ∉ xs.erase x := by
-    exact List.Nodup.not_mem_erase Hnd
-  contradiction
+  intros H x Hxs
+  exact (List.Perm.mem_iff H).mp Hxs
 
-theorem List_erase_mem [DecidableEq α] (xs : List α) (y : α):
-  ∀ x ∈ xs.erase y, x ≠ y → x ∈ xs :=
-by
-  intros x Hx Hxy
-  exact (List.mem_erase_of_ne Hxy).mp Hx
-
-theorem Finset_sdiff_singleton_eq_self.{u_1} {α : Type u_1} [DecidableEq α] {s : Finset α} {a : α} (ha : a ∉ s):
-  s \ {a} = s :=
-by
-  simp [ha]
-
-theorem List_erase_Finset_Nodup [DecidableEq α] (xs : List α) (y : α):
-  xs.Nodup → (xs.erase y).toFinset = xs.toFinset \ {y} :=
-by
-  induction xs
-  case nil =>
-    simp
-  case cons x xs Hind =>
-    simp [List.erase_cons]
-    intros Hx Hnd
-    split
-    case isTrue Heq =>
-      rw [←Heq]
-      rw [←Heq] at Hind
-      rw [Finset.insert_sdiff_of_mem xs.toFinset (List.Mem.head [])]
-      have Hx' : x ∉ xs.toFinset := by
-        rw [@List.mem_toFinset]
-        exact Hx
-      exact Eq.symm (Finset_sdiff_singleton_eq_self Hx')
-    case isFalse Hneq =>
-      simp [Hneq]
-      rw [Hind Hnd]
-      refine Eq.symm (Finset.insert_sdiff_of_not_mem xs.toFinset ?_)
-      simp [Finset.sdiff_singleton_eq_erase]
-      assumption
-
-def MQ2.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Unit (α × Prio) :=
-  newFRNDEvent MQ1.Dequeue.toOrdinaryNDEvent {
+def MQ3.Dequeue [DecidableEq α] [Inhabited α]: OrdinaryRDetEvent (MQ2 α ctx) (MQ3 α ctx) Unit (α × Prio) :=
+  newRDetEvent MQ2.Dequeue.toOrdinaryNDEvent {
     lift_in := id
     lift_out := id
-    guard (mq : MQ2 α ctx) _ := mq.queue ≠ []
-    effect := fun mq _ ((y, py), mq') =>
-                ∃ msg ∈ mq.queue, y = msg.payload ∧ py = msg.prio
-                                     ∧ mq'.queue = mq.queue.erase msg
-                                     ∧ mq'.clock = mq.clock
-                                     ∧ ∀ msg' ∈ mq.queue, msg' ≠ msg → msg'.prio ≤ msg.prio
+    guard (mq : MQ3 α ctx) _ := mq.queue ≠ []
+
+    action (mq : MQ3 α ctx) _ :=
+      let msg := if hq: mq.queue ≠ [] then mq.queue.head hq
+                 else errMessage
+      ((msg.payload, msg.prio), {mq with queue := mq.queue.tail})
 
     safety mq _ := by
       simp [Machine.invariant]
-      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hgrd y py mq' msg Hmsg Hy Hpy Hmq' Hclk Hprio
-
-      have HmsgLemma : ∀ msg' ∈ mq.queue, msg' ∉ mq'.queue → msg' = msg := by
-        rw [Hmq']
-        apply List_erase_in_prop
-
-      have HmsgLemma₂ : ∀ msg' ∈ mq'.queue, msg' ≠ msg := by
-        rw [Hmq']
-        intros msg' Hmsg'
-        exact List_Nodup_extension mq.queue Hinv₅ msg Hmsg msg' Hmsg'
-
-      have HmsgLemma₃ : ∀ msg' ∈ mq'.queue, msg' ≠ msg → msg' ∈ mq.queue := by
-        rw [Hmq']
-        intros msg' Hmsg' Hneq
-        exact List_erase_mem mq.queue msg msg' Hmsg' Hneq
-
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hgrd
       constructor
-      · simp [Hmq']
-        rw [@List.length_erase]
-        simp [Hmsg]
-        exact Nat.le_add_right_of_le Hinv₁
+      · exact Nat.le_add_right_of_le Hinv₁
       constructor
-      · intros msg' Hmsg'
-        have Hneq: msg' ≠ msg := by
-          exact HmsgLemma₂ msg' Hmsg'
-        have Hmsg'' : msg' ∈ mq.queue := by
-          exact HmsgLemma₃ msg' Hmsg' (HmsgLemma₂ msg' Hmsg')
-        rw [Hclk]
-        exact Hinv₂ msg' Hmsg''
+      · intros msg Hmsg
+        have Hmsg': msg ∈ mq.queue := by
+          exact List.mem_of_mem_tail Hmsg
+        exact Hinv₂ msg Hmsg'
       constructor
-      · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
-        have Hmsg₁' : msg₁ ≠ msg := by
-          exact HmsgLemma₂ msg₁ Hmsg₁
-        have Hmsg₂' : msg₂ ≠ msg := by
-          exact HmsgLemma₂ msg₂ Hmsg₂
-        have Hmsg₁'' : msg₁ ∈ mq.queue := by exact HmsgLemma₃ msg₁ Hmsg₁ (HmsgLemma₂ msg₁ Hmsg₁)
-        have Hmsg₂'' : msg₂ ∈ mq.queue := by exact HmsgLemma₃ msg₂ Hmsg₂ (HmsgLemma₂ msg₂ Hmsg₂)
-        exact Hinv₃ msg₁ Hmsg₁'' msg₂ Hmsg₂'' Hts
+      · intros msg₁ Hmsg₁ msg₂ Hmsg₂
+        apply Hinv₃
+        · exact List.mem_of_mem_tail Hmsg₁
+        · exact List.mem_of_mem_tail Hmsg₂
       constructor
-      · intros msg' Hmsg'
-        by_cases msg' ∈ mq.queue
-        case pos Hpos =>
-          exact Hinv₄ msg' (HmsgLemma₃ msg' Hmsg' (HmsgLemma₂ msg' Hmsg'))
-        case neg Hneg =>
-          have Heq : msg' = msg := by exact False.elim (Hneg (HmsgLemma₃ msg' Hmsg' (HmsgLemma₂ msg' Hmsg')))
-          exact Hinv₄ msg' (HmsgLemma₃ msg' Hmsg' (HmsgLemma₂ msg' Hmsg'))
-      · rw [Hmq']
-        exact List.Nodup.erase msg Hinv₅
-
-    feasibility mq x := by
-      intro Hinv
-      simp
-      intro Hnempty
-      have Hainv := FRefinement.lift_safe (AM:=MQ1 α ctx) (M:=MQ2 α ctx) mq Hinv
-      have Hafeqs_ := MQ1.Dequeue.po.feasibility (m:=mq.lift) () Hainv
-      simp [MQ1.Dequeue, FRefinement.lift] at *
-      obtain ⟨pl, p, mq', msg, Hmsg, Hpl, Hp, Hmq', Hprio⟩ := Hafeqs_ Hnempty ; clear Hafeqs_
-      exists pl ; exists p
-      exists {mq with queue := mq.queue.erase msg}
-      exists msg
+      · intros msg Hmsg
+        apply Hinv₄ ; exact List.mem_of_mem_tail Hmsg
+      constructor
+      · exact List_Nodeup_tail mq.queue Hinv₅
+      · exact List.Sorted.tail Hinv₆
 
     strengthening mq _ := by
-      simp [Machine.invariant, Refinement.refine, MQ1.Dequeue, FRefinement.lift]
+      simp [Machine.invariant, Refinement.refine, MQ2.Dequeue]
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hgrd amq Href₁ Href₂
+      intro Hamq
+      simp [Hamq] at Href₁
+      contradiction
 
     simulation mq _ := by
-      simp [Machine.invariant, Refinement.refine, MQ1.Dequeue, FRefinement.lift]
-      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hgrd y py mq' msg Hmsg Hy Hpy Hmq' Hclk Hprio
-      simp [Hmq']
-      exists msg
-      simp [Hmsg, Hy, Hpy, Hclk]
+      simp [Machine.invariant, Refinement.refine, MQ2.Dequeue]
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hgrd amq Href₁ Href₂
+      simp [Hgrd]
+      exists {clock := amq.clock, queue := amq.queue.erase (mq.queue.head Hgrd)}
       constructor
-      · exact List_erase_Finset_Nodup mq.queue msg Hinv₅
-      · intros msg Hmsg Hneq
-        exact Hprio msg Hmsg Hneq
-
+      · have Hhead: mq.queue.head Hgrd ∈ mq.queue := by
+          exact List.head_mem Hgrd
+        have Hhead': mq.queue.head Hgrd ∈ amq.queue := by
+          exact List_Perm_in mq.queue amq.queue Href₁ (mq.queue.head Hgrd) Hhead
+        exists mq.queue.head Hgrd
+        simp [Hhead']
+        intros msg Hmsg Hmsg'
+        sorry -- TODO : show that this is the max Prio
+      constructor
+      · sorry -- TODO perm
+      · simp [Href₂]
   }
 
 end MQueue
