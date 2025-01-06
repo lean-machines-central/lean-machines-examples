@@ -9,3 +9,5 @@ import LeanMachinesExamples.EventB.Bridge.Bridge2
 import LeanMachinesExamples.EventB.Courses.M2
 
 import LeanMachinesExamples.VDM.AlarmSystem.AlarmSystem2
+
+import LeanMachinesExamples.MQueue.MQ3
