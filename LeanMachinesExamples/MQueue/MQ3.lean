@@ -775,19 +775,6 @@ by
       intro Heq
       simp [Heq] at Hneq
 
-theorem OrderedInsert_perm (R : α → α → Prop) [DecidableRel R] (x : α) (xs : List α):
-  (xs.orderedInsert R x).Perm (x::xs) :=
-by
-  exact List.perm_orderedInsert R x xs
-
-theorem Perm_trans (xs ys zs : List α):
-  xs.Perm ys → ys.Perm zs
-  → xs.Perm zs :=
-by
-  intros H₁ H₂
-  exact List.Perm.trans H₁ H₂
-
-
 def MQ3.Enqueue [DecidableEq α]: OrdinaryREvent (MQ2 α ctx) (MQ3 α ctx) (α × Prio) Unit :=
   newREvent' MQ2.Enqueue.toOrdinaryEvent {
     guard := MQ3.enqueue_guard

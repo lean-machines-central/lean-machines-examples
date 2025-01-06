@@ -145,4 +145,10 @@ def Tick : OrdinaryEvent Clocked Unit Unit :=
     safety := fun m => by simp [Machine.invariant]
   }
 
+theorem Clocked.succ_lt (clk : Clock):
+  clk < clk + 1 :=
+by
+  refine Clock_LT clk (clk + 1) ?_
+  exact Nat.lt_add_one clk.val
+
 end Clocked
