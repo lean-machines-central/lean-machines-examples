@@ -335,6 +335,22 @@ instance: LinearOrder MessageSig where
       case isFalse H₂ =>
         rfl
 
+theorem MessageSig.le_prio (m₁ m₂ : MessageSig):
+  m₁ ≤ m₂ → m₁.1 ≤ m₂.1 :=
+by
+  intro Hle
+  unfold LE.le at Hle
+  simp [instLEMessageSig] at Hle
+  cases Hle
+  case inl Hlt =>
+    unfold LT.lt at Hlt
+    simp [instLTMessageSig] at Hlt
+    cases Hlt
+    case inl H => exact le_of_lt H
+    case inr H => simp [H]
+  case inr Heq =>
+    exact le_of_eq (congrArg Prod.fst Heq)
+
 instance [DecidableEq α]: LT (Message α) where
   lt m₁ m₂ := m₁.sig < m₂.sig
 
@@ -562,7 +578,7 @@ instance [instDec: DecidableEq α]: Machine MQContext (MQ3 α (instDec:=instDec)
                   ∧ (∀ msg₁ ∈ mq.queue, ∀ msg₂ ∈ mq.queue, msg₁.timestamp = msg₂.timestamp → msg₁ = msg₂)
                   ∧ (∀ msg ∈ mq.queue, ctx.minPrio ≤ msg.prio ∧ msg.prio ≤ ctx.maxPrio)
                   ∧ mq.queue.Nodup
-                  ∧ mq.sigs.Sorted (·≤·)
+                  ∧ mq.sigs.Sorted (·≥·)
   reset := { queue := [], clock := 0}
 
 theorem MQ3.clock_free [DecidableEq α] (mq : MQ3 α ctx):
@@ -665,7 +681,7 @@ by
 
 @[local simp]
 def MQ3.enqueue_action [DecidableEq α] (mq : MQ3 α ctx) (params : α × Prio) : MQ3 α ctx :=
-  { queue := mq.queue.orderedInsert (·≤·) ⟨⟨params.1, mq.clock⟩, params.2⟩,
+  { queue := mq.queue.orderedInsert (·≥·) ⟨⟨params.1, mq.clock⟩, params.2⟩,
                   clock := mq.clock + 1 }
 
 theorem insertionSorted_Sorted (R : α → α → Prop) [DecidableRel R] [IsTotal α R] [IsTrans α R] (xs : List α):
@@ -676,18 +692,18 @@ by
 
 theorem insertion_Map [DecidableEq α] (mqueue : List (Message α)) (x : Message α):
   x.sig ∉ List.map Message.sig mqueue
-  → List.map Message.sig (mqueue.orderedInsert (·≤·) x) = (List.map Message.sig mqueue).orderedInsert (·≤·) x.sig :=
+  → List.map Message.sig (mqueue.orderedInsert (·≥·) x) = (List.map Message.sig mqueue).orderedInsert (·≥·) x.sig :=
 by
   intro Hnotin
   refine
-    List.map_orderedInsert (fun x1 x2 => x1 ≤ x2) (fun x1 x2 => x1 ≤ x2) Message.sig mqueue x ?_ ?_
+    List.map_orderedInsert (fun x1 x2 => x1 ≥ x2) (fun x1 x2 => x1 ≥ x2) Message.sig mqueue x ?_ ?_
   case _ =>
     intro ms Hms
     constructor
     case mp =>
       simp
       intro H
-      exact Message.sigLE ms x H
+      exact Message.sigLE x ms H
     case mpr =>
       simp
       have Hin : ms.sig ∈ List.map Message.sig mqueue := by
@@ -702,6 +718,7 @@ by
         left
         exact Hlt
       case inr Heqs =>
+        rw [Heqs] at Hneq
         contradiction
   case _ =>
     intro ms Hms
@@ -709,7 +726,7 @@ by
     constructor
     case mp =>
       intro H
-      exact Message.sigLE x ms H
+      exact Message.sigLE ms x H
     case mpr =>
       have Hin : ms.sig ∈ List.map Message.sig mqueue := by
         exact List.mem_map_of_mem Message.sig Hms
@@ -727,11 +744,11 @@ by
         contradiction
 
 theorem MessageSig_orderedInsert_Sorted (sigs : List MessageSig):
-  sigs.Sorted (·≤·)
-  → (sigs.orderedInsert (·≤·) x).Sorted (·≤·) :=
+  sigs.Sorted (·≥·)
+  → (sigs.orderedInsert (·≥·) x).Sorted (·≥·) :=
 by
   intro H
-  exact insertionSorted_Sorted (fun x1 x2 => x1 ≤ x2) sigs H
+  exact insertionSorted_Sorted (fun x1 x2 => x1 ≥ x2) sigs H
 
 theorem Sorted_NotIn (R : α → α → Prop) [DecidableRel R] (x y : α) (xs : List α):
   y ≠ x → y ∉ xs → y ∉ List.orderedInsert R x xs :=
@@ -938,6 +955,13 @@ by
   intros H x Hxs
   exact (List.Perm.mem_iff H).mp Hxs
 
+theorem List_mem_not_head:
+  x ≠ y → x ∈ y :: xs → x ∈ xs :=
+by
+  intros H₁ H₂
+  exact List.mem_of_ne_of_mem H₁ H₂
+
+
 def MQ3.Dequeue [DecidableEq α] [Inhabited α]: OrdinaryRDetEvent (MQ2 α ctx) (MQ3 α ctx) Unit (α × Prio) :=
   newRDetEvent MQ2.Dequeue.toOrdinaryNDEvent {
     lift_in := id
@@ -983,6 +1007,8 @@ def MQ3.Dequeue [DecidableEq α] [Inhabited α]: OrdinaryRDetEvent (MQ2 α ctx) 
       intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hgrd amq Href₁ Href₂
       simp [Hgrd]
       exists {clock := amq.clock, queue := amq.queue.erase (mq.queue.head Hgrd)}
+      have Hmq: mq.queue = (mq.queue.head Hgrd) :: mq.queue.tail := by
+          exact Eq.symm (List.head_cons_tail mq.queue Hgrd)
       constructor
       · have Hhead: mq.queue.head Hgrd ∈ mq.queue := by
           exact List.head_mem Hgrd
@@ -991,9 +1017,38 @@ def MQ3.Dequeue [DecidableEq α] [Inhabited α]: OrdinaryRDetEvent (MQ2 α ctx) 
         exists mq.queue.head Hgrd
         simp [Hhead']
         intros msg Hmsg Hmsg'
-        sorry -- TODO : show that this is the max Prio
+        have H₁: (mq.queue.head Hgrd).prio = (mq.queue.head Hgrd).sig.1 := by
+          rfl
+        rw [H₁]
+        have Hsig: msg.sig ∈ List.map Message.sig mq.queue := by
+          refine List.mem_map_of_mem Message.sig ?_
+          exact List_Perm_in amq.queue mq.queue (id (List.Perm.symm Href₁)) msg Hmsg
+        have Hmsg'' : msg ∈ mq.queue := by
+          exact List_Perm_in amq.queue mq.queue (id (List.Perm.symm Href₁)) msg Hmsg
+        have Hsort :  List.Sorted (·≥·) (List.map Message.sig ((mq.queue.head Hgrd) :: mq.queue.tail)) := by
+          rw [← Hmq]
+          exact Hinv₆
+        have Hmsg''': msg ∈ mq.queue.tail := by
+          apply List.mem_of_ne_of_mem (y:=mq.queue.head Hgrd)
+          · exact Hmsg'
+          · rw [←Hmq]
+            exact Hmsg''
+        have Hsup: msg.sig ≤ (mq.queue.head Hgrd).sig := by
+          apply List.rel_of_sorted_cons Hsort
+          exact List.mem_map_of_mem Message.sig Hmsg'''
+        have Hp: msg.prio = msg.sig.1 := rfl
+        rw [Hp]
+        exact MessageSig.le_prio msg.sig (mq.queue.head Hgrd).sig Hsup
       constructor
-      · sorry -- TODO perm
+      · simp
+        have Hmq': mq.queue.tail = mq.queue.erase (mq.queue.head Hgrd) := by
+          have Hmq'' : ((mq.queue.head Hgrd) :: mq.queue.tail).erase (mq.queue.head Hgrd)
+                       = mq.queue.tail := by
+            exact List.erase_cons_head (mq.queue.head Hgrd) mq.queue.tail
+          rw [←Hmq'']
+          rw [←Hmq]
+        rw [Hmq']
+        exact List.Perm.erase (mq.queue.head Hgrd) Href₁
       · simp [Href₂]
   }
 
