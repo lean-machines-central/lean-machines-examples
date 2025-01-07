@@ -80,7 +80,21 @@ axiom Array_insertionSortMem {α : Type} (lt : α → α → Bool) (as : Array �
 axiom Array_insertionSortMemConv {α : Type} (lt : α → α → Bool) (as : Array α) (x : α):
   x ∈ as.insertionSort (lt:=lt) → x ∈ as
 
+theorem Array_push_toList (as : Array α) (x : α):
+  (as.push x).toList = as.toList ++ [x] :=
+by
+  apply Array.push_toList
 
+theorem Array_push_Nodup (as : Array α) (x : α):
+  as.toList.Nodup
+  → x ∉ as
+  → (as.push x).toList.Nodup :=
+by
+  intros Has Hx
+  rw [@Array.push_toList]
+  rw [@List.nodup_middle]
+  simp
+  simp [Has, Hx]
 
 def MQ4.Enqueue [DecidableEq α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) (α × Prio) Unit :=
   newSREvent' MQ3.Enqueue.toOrdinaryEvent {
@@ -174,7 +188,13 @@ def MQ4.Enqueue [DecidableEq α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) (α �
           simp [Hmsg'']
           exact ⟨Hgrd₂, Hgrd₃⟩
       constructor
-      · sorry
+      · have Hin: { payload := x, timestamp := mq.clock, prio := p } ∈ mq.queue.push { payload := x, timestamp := mq.clock, prio := p } := by
+          exact Array.mem_push_self
+        have Hin': { payload := x, timestamp := mq.clock, prio := p } ∈ ((mq.queue.push { payload := x, timestamp := mq.clock, prio := p }).insertionSort fun x1 x2 => decide (x2 ≤ x1)) := by
+          apply Array_insertionSortMem <;> assumption
+        have Hin'': { payload := x, timestamp := mq.clock, prio := p } ∈ ((mq.queue.push { payload := x, timestamp := mq.clock, prio := p }).insertionSort fun x1 x2 => decide (x2 ≤ x1)).toList := by
+          exact Hin'.val
+        sorry
       · sorry
 
     strengthening := fun mq (x, p) => by
