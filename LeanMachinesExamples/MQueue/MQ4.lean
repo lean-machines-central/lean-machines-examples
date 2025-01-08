@@ -96,6 +96,22 @@ by
   simp
   simp [Has, Hx]
 
+axiom Array_insertionSort_Perm {α} (as : Array α) (lt : α → α → Bool):
+  as.toList.Perm
+  (as.insertionSort (lt:=lt)).toList
+
+theorem Array_insertionSort_Nodup (as : Array α) (lt : α → α → Bool):
+  as.toList.Nodup
+  → (as.insertionSort (lt:=lt)).toList.Nodup :=
+by
+  intro Hnd
+  apply List.Nodup.perm (l:=as.toList) (l':=(as.insertionSort (lt:=lt)).toList)
+  · exact Hnd
+  · apply Array_insertionSort_Perm (as:=as)
+
+axiom Array_insertionSort_Sorted {α} (as : Array α) (lt : α → α → Bool):
+  (as.insertionSort (lt:=lt)).toList.Sorted (fun x₁ x₂ => lt x₁ x₂)
+
 def MQ4.Enqueue [DecidableEq α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) (α × Prio) Unit :=
   newSREvent' MQ3.Enqueue.toOrdinaryEvent {
     lift_in := id
@@ -188,19 +204,21 @@ def MQ4.Enqueue [DecidableEq α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) (α �
           simp [Hmsg'']
           exact ⟨Hgrd₂, Hgrd₃⟩
       constructor
-      · have Hin: { payload := x, timestamp := mq.clock, prio := p } ∈ mq.queue.push { payload := x, timestamp := mq.clock, prio := p } := by
-          exact Array.mem_push_self
-        have Hin': { payload := x, timestamp := mq.clock, prio := p } ∈ ((mq.queue.push { payload := x, timestamp := mq.clock, prio := p }).insertionSort fun x1 x2 => decide (x2 ≤ x1)) := by
-          apply Array_insertionSortMem <;> assumption
-        have Hin'': { payload := x, timestamp := mq.clock, prio := p } ∈ ((mq.queue.push { payload := x, timestamp := mq.clock, prio := p }).insertionSort fun x1 x2 => decide (x2 ≤ x1)).toList := by
-          exact Hin'.val
-        sorry
+      · refine
+          Array_insertionSort_Nodup
+            (mq.queue.push { payload := x, timestamp := mq.clock, prio := p })
+            (fun x1 x2 => decide (x2 ≤ x1)) ?_
+        refine Array_push_Nodup mq.queue { payload := x, timestamp := mq.clock, prio := p } Hinv₅ ?_
+        intro Hcontra
+        have Hinv₂' := Hinv₂ { payload := x, timestamp := mq.clock, prio := p } Hcontra
+        simp at Hinv₂'
       · sorry
 
     strengthening := fun mq (x, p) => by
       simp [MQ3.Enqueue, FRefinement.lift, MQ4.lift, MQ3.enqueue_guard]
 
     simulation := fun mq (x, p) => by
-      simp [MQ3.Enqueue, FRefinement.lift, MQ3.enqueue_action]
+      simp [MQ3.Enqueue, FRefinement.lift, MQ3.enqueue_action, MQ4.lift]
+      intros Hinv Hgrd₁ Hgrd₂ Hgrd₃
       sorry
   }
