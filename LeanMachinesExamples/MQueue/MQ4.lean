@@ -112,6 +112,9 @@ by
 axiom Array_insertionSort_Sorted {α} (as : Array α) (lt : α → α → Bool):
   (as.insertionSort (lt:=lt)).toList.Sorted (fun x₁ x₂ => lt x₁ x₂)
 
+axiom Array_insertionSort_List_InsertionSort {α} (as : Array α) (lt : α → α → Bool):
+  (as.insertionSort (lt:=lt)).toList = (as.toList).insertionSort (fun x₁ x₂ => lt x₁ x₂)
+
 def MQ4.Enqueue [DecidableEq α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) (α × Prio) Unit :=
   newSREvent' MQ3.Enqueue.toOrdinaryEvent {
     lift_in := id
