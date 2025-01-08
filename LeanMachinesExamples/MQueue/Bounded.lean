@@ -6,6 +6,7 @@ namespace Bounded
 
 structure BoundedCtx where
   maxCount : Nat
+  prop_maxCount : Prop := maxCount > 0
 
 structure Bounded (ctx : BoundedCtx) where
   count : Nat
