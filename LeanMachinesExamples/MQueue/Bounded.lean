@@ -1,8 +1,7 @@
 
 import LeanMachines.Event.Basic
 import LeanMachines.Event.Ordinary
-
-namespace Bounded
+import LeanMachines.NonDet.Ordinary
 
 structure BoundedCtx where
   maxCount : Nat
@@ -11,9 +10,11 @@ structure BoundedCtx where
 structure Bounded (ctx : BoundedCtx) where
   count : Nat
 
+namespace Bounded
+
 instance: Machine BoundedCtx (Bounded ctx) where
   context := ctx
-  invariant := fun m => m.count ≤ ctx.maxCount
+  invariant m := m.count ≤ ctx.maxCount
   reset := { count := 0 }
 
 def Init : InitEvent (Bounded ctx) Unit Unit :=
@@ -33,7 +34,27 @@ def Decr : OrdinaryEvent (Bounded ctx) Unit Unit :=
   newEvent'' {
     guard m := m.count > 0
     action m _ := { m with count := m.count - 1 }
-    safety := fun m => by simp [Machine.invariant] ; omega
+    safety m := by simp [Machine.invariant] ; omega
+  }
+
+def Discard : OrdinaryNDEvent (Bounded ctx) Unit Nat :=
+  newNDEvent {
+    guard m _ := m.count > 0
+    effect m _ grd := fun (k, m') =>
+      ∃ k > 0, m' = {m with count := m.count - k}
+
+    safety m _ := by
+      simp [Machine.invariant]
+      intros Hinv Hgrd m' k Hk Hm'
+      simp [Hm']
+      exact Nat.le_add_right_of_le Hinv
+
+    feasibility m _ := by
+      simp [Machine.invariant]
+      intros Hinv Hgrd
+      exists { count := m.count - 1}
+      exists 1
+
   }
 
 end Bounded
