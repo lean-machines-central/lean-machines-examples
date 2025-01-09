@@ -135,17 +135,17 @@ instance: Machine EmptyCtx Clocked where
 
 def Init : InitEvent Clocked Unit Unit :=
   newInitEvent'' {
-    init := { clock := 0 }
+    init _ := { clock := 0 }
     safety := fun _ => by simp [Machine.invariant]
   }
 
 def Tick : OrdinaryEvent Clocked Unit Unit :=
   newEvent'' {
-    action m := { m with clock := m.clock + 1 }
+    action m _ := { m with clock := m.clock + 1 }
     safety := fun m => by simp [Machine.invariant]
   }
 
-theorem Clocked.succ_lt (clk : Clock):
+theorem Clock.succ_lt (clk : Clock):
   clk < clk + 1 :=
 by
   refine Clock_LT clk (clk + 1) ?_

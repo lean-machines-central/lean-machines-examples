@@ -12,5 +12,5 @@ lean_exe «lean-machines-examples» where
   root := `Main
 
 require «lean-machines» from git
-  "https://github.com/lean-machines-central/lean-machines.git" @ "main"
+  "https://github.com/lean-machines-central/lean-machines.git" @ "prop_guards"
 

@@ -146,7 +146,7 @@ instance [instDec: DecidableEq α] : FRefinement (MQ1 α ctx) (MQ2 α ctx) where
 
 def MQ2.Init [instDec: DecidableEq α] : InitREvent (MQ1 α ctx) (MQ2 α ctx) Unit Unit :=
   newInitREvent'' MQ1.Init.toInitEvent {
-    init := { queue := [], clock := 0}
+    init _ := { queue := [], clock := 0}
     safety _ := by simp [Machine.invariant]
     strengthening _ := by simp [Machine.invariant, MQ1.Init]
     simulation _ := by simp [Machine.invariant, Refinement.refine, MQ1.Init, FRefinement.lift]
@@ -167,28 +167,28 @@ by
       exact List.toFinset_card_le mq.queue
     exact Nat.lt_of_le_of_lt H Hgrd₁
   · exact ⟨Hgrd₂, Hgrd₃⟩
-
+/-
 @[local simp]
 def enqueue_action [DecidableEq α] (mq : MQ2 α ctx) (params : α × Prio) : MQ2 α ctx :=
   { queue := ⟨⟨params.1, mq.clock⟩, params.2⟩ :: mq.queue,
                   clock := mq.clock + 1 }
 
 theorem enqueue_action_prop [DecidableEq α] (mq : MQ2 α ctx) (params : α × Prio):
-  (enqueue_action mq params).lift = ((MQ1.Enqueue.to_Event).action mq.lift params).2 :=
+  (enqueue_action mq params).lift = ((MQ1.Enqueue.to_Event).action mq.lift params (enqueue_guard mq params) params).2 :=
 by
   simp [MQ1.Enqueue]
   have Hre : mq.queue.toFinset = mq.messages := by
     exact rfl
   rw [Hre, ←lift_Messages]
   simp [Finset.insert_eq, Finset.union_comm]
-
+-/
 
 def MQ2.Enqueue [DecidableEq α]: OrdinaryREvent (MQ1 α ctx) (MQ2 α ctx) (α × Prio) Unit :=
   newFREvent' MQ1.Enqueue.toOrdinaryEvent {
     guard := fun mq (x, px) => mq.queue.length < ctx.maxCount
                                ∧ ctx.minPrio ≤ px ∧ px ≤ ctx.maxPrio
 
-    action := fun mq (x, px) =>
+    action := fun mq (x, px) _ =>
                 { queue := ⟨⟨x, mq.clock⟩, px⟩ :: mq.queue,
                   clock := mq.clock + 1 }
 
@@ -246,14 +246,15 @@ def MQ2.Enqueue [DecidableEq α]: OrdinaryREvent (MQ1 α ctx) (MQ2 α ctx) (α �
       · exact ⟨Hgrd₂, Hgrd₃⟩
 
     simulation := fun mq (x, px) => by
-      intro Hinv
-      simp
-      intros Hgrd₁ Hgrd₂ Hgrd₃
-      have Hlift : FRefinement.lift mq = mq.lift := by
-        rfl
-      rw [Hlift]
-      rw [←@enqueue_action_prop (mq:=mq) (params:=(x, px))]
-      exact rfl
+      simp [Machine.invariant]
+      intro ⟨Hinv₁, Hinv₂, Hinv₃, Hinv₄, Hinv₅⟩
+      intro ⟨Hgrd₁, Hgrd₂, Hgrd₃⟩
+      simp [FRefinement.lift, MQ1.Enqueue]
+      have Hni : { payload := x, timestamp := mq.clock, prio := px } ∉ mq.queue := by
+         intro Hcontra
+         have Hinv₂' := Hinv₂ { payload := x, timestamp := mq.clock, prio := px } Hcontra
+         simp at Hinv₂'
+      simp [Finset.insert_eq, Finset.union_comm]
   }
 
 def MQ2.priorities [DecidableEq α] (mq : MQ2 α ctx) : Finset Prio :=
@@ -451,7 +452,7 @@ def MQ2.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
     lift_in := id
     lift_out := id
     guard (mq : MQ2 α ctx) _ := mq.queue ≠ []
-    effect := fun mq _ ((y, py), mq') =>
+    effect := fun mq _ _ ((y, py), mq') =>
                 ∃ msg ∈ mq.queue, y = msg.payload ∧ py = msg.prio
                                      ∧ mq'.queue = mq.queue.erase msg
                                      ∧ mq'.clock = mq.clock

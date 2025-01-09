@@ -62,7 +62,7 @@ instance [DecidableEq α]: SRefinement (MQ3 α ctx) (MQ4 α ctx) where
 
 def MQ4.Init [DecidableEq α] : InitREvent (MQ3 α ctx) (MQ4 α ctx) Unit Unit :=
   newInitSREvent'' MQ3.Init.toInitEvent {
-    init := { queue := #[], clock := 0}
+    init _ := { queue := #[], clock := 0}
     safety _ := by
       simp [Machine.invariant]
       simp [MQ4.sigs, MQ4.lift]
@@ -123,10 +123,10 @@ def MQ4.Enqueue [DecidableEq α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) (α �
        mq.queue.size < ctx.maxCount
        ∧ ctx.minPrio ≤ p ∧ p ≤ ctx.maxPrio
 
-    action := fun mq (x, p) => { clock := mq.clock + 1,
-                                 queue := Array.insertionSort
-                                   (mq.queue.push {payload:=x, prio:=p, timestamp:=mq.clock})
-                                   (·≥·)}
+    action := fun mq (x, p) _ => { clock := mq.clock + 1,
+                                   queue := Array.insertionSort
+                                     (mq.queue.push {payload:=x, prio:=p, timestamp:=mq.clock})
+                                     (·≥·)}
 
     safety := fun mq (x, p) => by
       simp [Machine.invariant]
@@ -151,10 +151,10 @@ def MQ4.Enqueue [DecidableEq α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) (α �
             exact Hinv₂ msg Hmsg''
           apply lt_trans (b:=mq.clock)
           · assumption
-          · exact Clocked.succ_lt mq.clock
+          · exact Clock.succ_lt mq.clock
         case _ Hmsg'' =>
           simp [Hmsg'']
-          exact Clocked.succ_lt mq.clock
+          exact Clock.succ_lt mq.clock
       constructor
       · intros msg₁ Hmsg₁ msg₂ Hmsg₂
         have Hmsg₁' : msg₁ ∈ mq.queue.push { payload := x, timestamp := mq.clock, prio := p } := by

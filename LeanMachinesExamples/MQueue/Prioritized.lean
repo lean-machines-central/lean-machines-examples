@@ -152,14 +152,14 @@ instance: Machine PrioCtx (Prioritized ctx) where
 
 def Init : InitEvent (Prioritized ctx) Unit Unit :=
   newInitEvent'' {
-    init := { priorities := ∅ }
+    init _ := { priorities := ∅ }
     safety _ := by simp [Machine.invariant]
   }
 
 def NewPrio : OrdinaryEvent (Prioritized ctx) Prio Unit :=
   newEvent' {
     guard m p := ctx.minPrio ≤ p ∧ p ≤ ctx.maxPrio ∧ p ∉ m.priorities
-    action m p := { m with priorities := m.priorities ∪ {p} }
+    action m p _ := { m with priorities := m.priorities ∪ {p} }
     safety m p := by
       simp [Machine.invariant]
       intros Hinv Hgrd₁ Hgrd₂ Hgrd₃ q Hq
@@ -174,7 +174,7 @@ def NewPrio : OrdinaryEvent (Prioritized ctx) Prio Unit :=
 def DelPrio : OrdinaryEvent (Prioritized ctx) Prio Unit :=
   newEvent' {
     guard m p := ctx.minPrio ≤ p ∧ p ≤ ctx.maxPrio ∧ p ∈ m.priorities
-    action m p := { m with priorities := m.priorities \ {p} }
+    action m p _ := { m with priorities := m.priorities \ {p} }
     safety m p := by
       simp [Machine.invariant]
       intros Hinv Hgrd₁ Hgrd₂ Hgrd₃ q Hq HHq
