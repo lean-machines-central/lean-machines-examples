@@ -139,7 +139,7 @@ end Init
 Refinement of `M1.Init`. -/
 def Init : InitREvent (M1 ctx.toContext_1) (M2 ctx) Unit Unit :=
 newInitREvent'' M1.Init.toInitEvent {
-  init :=   { domain := ∅, attendants := fun _ => ∅ }
+  init _ :=   { domain := ∅, attendants := fun _ => ∅ }
   safety := by simp [Machine.invariant, invariant₁, invariant₂, invariant₃, invariant₄, invariant₅,
                      Init.init, invariant₄, invariant₅]
   strengthening := by simp [M1.Init]
@@ -260,12 +260,12 @@ by
   contradiction
 
 theorem PO_simulation (m2 : M2 ctx) (cs : Finset Course):
-  Machine.invariant m2 →
-  guard m2 cs →
+  (Hinv: Machine.invariant m2) →
+  (Hgrd : guard m2 cs) →
   ∀ (m1 : M1 ctx.toContext_1),
-    Refinement.refine m1 m2 →
+    (Href: Refinement.refine m1 m2) →
       ∃ (m1' : M1 ctx.toContext_1),
-        M1.OpenCourses.to_NDEvent.effect m1 () ((), m1')
+        M1.OpenCourses.to_NDEvent.effect m1 () (PO_strengthening m2 cs Hinv Hgrd m1 Href) ((), m1')
         ∧ Refinement.refine m1' (OpenCourses.action m2 cs) :=
 by
   intros Hinv Hgrd m1 Href
@@ -325,7 +325,7 @@ Note that this even is deterministic unlike its abstract counterpart. -/
 def OpenCourses : ConvergentRDetEvent Nat (M1 ctx.toContext_1) (M2 ctx) (Finset Course) Unit Unit Unit :=
   newConvergentRDetEvent' M1.OpenCourses.toOrdinaryNDEvent {
     guard := OpenCourses.guard
-    action := OpenCourses.action
+    action := fun m cs _ => OpenCourses.action m cs
     lift_in := fun _ => ()
     safety := fun m2 cs => by
       simp [Machine.invariant]
@@ -534,7 +534,7 @@ the non-deterministic event `M1.CloseCourses`. -/
 def CloseCourses : ConvergentREvent Nat (M1 ctx.toContext_1) (M2 ctx) (Finset Course) Unit :=
   newConvergentREvent' M1.CloseCourses.toConvergentEvent.toOrdinaryEvent {
     guard := CloseCourses.guard
-    action := CloseCourses.action
+    action := fun m cs _ => CloseCourses.action m cs
     lift_in := id
     safety := fun m cs => by
       simp [Machine.invariant]
@@ -1115,7 +1115,7 @@ Refinement of the `M1.Register` event. -/
 def Register : ConvergentREvent Nat (M1 ctx.toContext_1) (M2 ctx) (Member × Course) Unit :=
   newConvergentREvent' M1.Register.toConvergentEvent.toOrdinaryEvent {
     guard := fun m (p,c) => Register.guard m p c
-    action := fun m (p,c) => Register.action m p c
+    action := fun m (p,c) _ => Register.action m p c
     lift_in := id
     safety := fun m (p,c) => by
       simp [Machine.invariant, Register.guard]

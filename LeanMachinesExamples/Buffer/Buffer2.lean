@@ -137,7 +137,7 @@ specification of a priority.
 def B2.PutPrio [DecidableEq α] : ConvergentREvent Nat (B1 ctx α) (B2 ctx α) (Priority × α) Unit α Unit :=
   newConvergentSREvent' B1.Put.toConvergentEvent.toOrdinaryEvent {
     guard := fun b2 _ => b2.data.length < ctx.maxSize
-    action := fun b2 (p, x) => { data := (p,x) :: b2.data }
+    action := fun b2 (p, x) _ => { data := (p,x) :: b2.data }
     lift_in := fun (_, x) => x
     safety := fun b2 (p, x) => by
       simp [Machine.invariant]
@@ -156,23 +156,19 @@ def B2.PutPrio [DecidableEq α] : ConvergentREvent Nat (B1 ctx α) (B2 ctx α) (
 
 /-- Retrieving an element from the buffer, regardless of priorities,
  a refinement of `B1.Fetch`. -/
-def B2.Fetch [DecidableEq α] [Inhabited α]: ConvergentRDetEvent Nat (B1 ctx α) (B2 ctx α) Unit α :=
+def B2.Fetch [DecidableEq α] : ConvergentRDetEvent Nat (B1 ctx α) (B2 ctx α) Unit α :=
   newConvergentSRDetEvent B1.Fetch.toConvergentNDEvent.toAnticipatedNDEvent.toOrdinaryNDEvent
   {
     guard := fun b2 _ => b2.data.length > 0
-    action := fun b2 _ =>
-      match b2.data with
-      | [] => (default, b2)
-      | (_, x)::xs => (x, { data := xs })
+    action := fun b2 x grd =>
+      by have Hne : b2.data ≠ [] := by
+           exact List.ne_nil_of_length_pos grd
+         exact ((b2.data.head Hne).2, { data := b2.data.tail})
 
     safety := fun b2 x => by
       simp [Machine.invariant]
-      split
-      case _ _ Heq =>
-        simp [Heq]
-      case _ x xs Heq =>
-        simp [Heq]
-        intro H ; exact Nat.le_of_succ_le H
+      intro Hinv Hgrd
+      exact Nat.le_add_right_of_le Hinv
 
     lift_in := id
     lift_out := id
@@ -182,14 +178,16 @@ def B2.Fetch [DecidableEq α] [Inhabited α]: ConvergentRDetEvent Nat (B1 ctx α
 
     simulation := fun b2 _ => by
       simp [Machine.invariant, B1.Fetch, Refinement.refine, FRefinement.lift]
-      split <;> simp [*]
+      intros Hinv Hgrd
+      have Hne : b2.data ≠ [] := by
+           exact List.ne_nil_of_length_pos Hgrd
+      exists (b2.data.head Hne).1
+      simp
 
     variant := fun b2 => b2.data.length
 
     convergence := fun b2 _ => by
       simp [Machine.invariant]
-      split <;> simp [*]
-
   }
 
 /-!
@@ -541,7 +539,7 @@ def B2.FetchPrio [DecidableEq α] [Inhabited α]: ConvergentRDetEvent Nat (B1 ct
   newConvergentSRDetEvent B1.Fetch.toConvergentNDEvent.toAnticipatedNDEvent.toOrdinaryNDEvent
   {
     guard := fun b2 _ => b2.data.length > 0
-    action := fun b2 _ =>
+    action := fun b2 _  _=>
       match removeByPrio b2.data with
       | (some x, xs) => (x, { data := xs })
       | _ => (default, b2)

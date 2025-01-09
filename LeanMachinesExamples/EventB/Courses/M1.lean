@@ -173,7 +173,7 @@ end Init
 /-- Initialization event: empty course system (no opened course, no inscription). -/
 def Init : InitREvent (M0 ctx.toContext) (M1 ctx) Unit Unit :=
   newInitSREvent'' M0.Init {
-  init := Init.init
+  init _ := Init.init
   safety := by simp [Machine.invariant, M1.Init.PO_safety₁, M1.Init.PO_safety₂]
                constructor
                · apply M0.Init.PO_safety₁
@@ -302,9 +302,9 @@ by
 
 theorem PO_simulation (m1 : M1 ctx) (cs : Finset Course):
   Machine.invariant m1
-    → guard m1 cs
+    → (Hgrd: guard m1 cs)
     → let m0 : M0 ctx.toContext := FRefinement.lift m1
-      (M0.CloseCourses.to_Event.action m0 cs).2 = FRefinement.lift (action m1 cs) :=
+      (M0.CloseCourses.to_Event.action m0 cs Hgrd).2 = FRefinement.lift (action m1 cs) :=
 by
   simp [FRefinement.lift, M0.CloseCourses]
 
@@ -314,11 +314,11 @@ end CloseCourses
 def CloseCourses : ConvergentREvent Nat (M0 ctx.toContext) (M1 ctx) (Finset Course) Unit :=
   newConvergentSREvent' M0.CloseCourses.toAnticipatedEvent.toOrdinaryEvent {
   guard := CloseCourses.guard
-  action := CloseCourses.action
+  action := fun m cs grd => CloseCourses.action m cs
   lift_in := id
-  safety := fun m cs => by intros Hinv _
+  safety := fun m cs => by intros Hinv Hgrd
                            simp [Machine.invariant] at *
-                           simp [Hinv, CloseCourses.PO_safety₁,
+                           simp [Hinv, Hgrd, CloseCourses.PO_safety₁,
                                       CloseCourses.PO_safety₂]
                            constructor
                            · apply M0.CloseCourses.PO_safety₁ ; simp [Hinv]
@@ -426,7 +426,7 @@ end Register
 def Register : ConvergentRDetEvent Nat (M0 ctx.toContext) (M1 ctx) (Member × Course) Unit :=
   newConcreteConvergentSREvent' {
     guard := fun m (p,c) => Register.guard m p c
-    action := fun m (p,c) => Register.action m p c
+    action := fun m (p,c) _ => Register.action m p c
     safety := fun m (p,c) => by
       simp [Machine.invariant]
       intros Hainv₁ Hainv₂ Hinv₁ Hinv₂ Hgrd

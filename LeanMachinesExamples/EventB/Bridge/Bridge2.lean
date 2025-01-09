@@ -101,9 +101,9 @@ by
 /-- Initialization event: empty bridge (refinement of `Bridge1.Init`). -/
 def Init : InitREvent (Bridge1 ctx) (Bridge2 ctx) Unit Unit :=
   newInitREvent'' Bridge1.Init.toInitEvent {
-    init := let b1 : Bridge1 ctx := (Bridge1.Init.init ()).2
-            { b1  with mainlandTL := Color.Green , islandTL := Color.Red,
-                       mainlandPass := false, islandPass := true }
+    init _ := let b1 : Bridge1 ctx := (Bridge1.Init.init () (by simp [Bridge1.Init])).2
+              { b1  with mainlandTL := Color.Green , islandTL := Color.Red,
+                         mainlandPass := false, islandPass := true }
     safety := by
       simp [Machine.invariant, invariant₁, invariant₂, invariant₃, invariant₄, invariant₅]
       simp [Bridge1.Init]
@@ -121,8 +121,8 @@ def EnterFromMainland₁ : OrdinaryREvent (Bridge1 ctx) (Bridge2 ctx) Unit Unit 
   newREvent'' Bridge1.EnterFromMainland.toOrdinaryEvent {
     guard := fun b2 => b2.mainlandTL = Color.Green ∧ b2.nbOnIsland + b2.nbToIsland + 1 ≠ ctx.maxCars
 
-    action := fun b2 => { b2 with nbToIsland := b2.nbToIsland + 1
-                                  mainlandPass := true }
+    action := fun b2 _ => { b2 with nbToIsland := b2.nbToIsland + 1
+                                    mainlandPass := true }
     safety := fun b2 => by
       simp [Machine.invariant, invariant₁, invariant₂, invariant₃, invariant₄, invariant₅]
       intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hinv₇ Hgrd₁ Hgrd₂
@@ -161,9 +161,9 @@ This is the second event of a two-part decomposition of the action.
 def EnterFromMainland₂ : OrdinaryREvent (Bridge1 ctx) (Bridge2 ctx) Unit Unit :=
   newREvent'' Bridge1.EnterFromMainland.toOrdinaryEvent {
     guard := fun b2 => b2.mainlandTL = Color.Green ∧ b2.nbOnIsland + b2.nbToIsland + 1 = ctx.maxCars
-    action := fun b2 => { b2 with nbToIsland := b2.nbToIsland + 1
-                                  mainlandTL := Color.Red
-                                  mainlandPass := true }
+    action := fun b2 _ => { b2 with nbToIsland := b2.nbToIsland + 1
+                                    mainlandTL := Color.Red
+                                    mainlandPass := true }
 
     safety := fun b2 => by simp [Machine.invariant, invariant₁, invariant₂, invariant₃, invariant₄, invariant₅]
                            intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hinv₇ Hgrd₁ Hgrd₂
@@ -296,9 +296,9 @@ def LeaveIsland₁ : ConvergentREvent Nat (Bridge1 ctx) (Bridge2 ctx) Unit Unit 
   newConvergentREvent'' Bridge1.LeaveIsland.toConvergentEvent.toAnticipatedEvent.toOrdinaryEvent {
     guard := fun b2 => b2.islandTL = Color.Green ∧ b2.nbOnIsland ≠ 1
 
-    action := fun b2 => { b2 with nbFromIsland := b2.nbFromIsland + 1
-                                  nbOnIsland := b2.nbOnIsland - 1
-                                  islandPass := true }
+    action := fun b2 _ => { b2 with nbFromIsland := b2.nbFromIsland + 1
+                                    nbOnIsland := b2.nbOnIsland - 1
+                                    islandPass := true }
 
     safety := fun b2 => by
       simp [Machine.invariant, invariant₁, invariant₂, invariant₃, invariant₄, invariant₅]
@@ -337,7 +337,7 @@ def LeaveIsland₁ : ConvergentREvent Nat (Bridge1 ctx) (Bridge2 ctx) Unit Unit 
 
     simulation := fun b2 => by
       simp
-      intros _ _ _ am
+      intros _ _  am
       simp [Refinement.refine, refine, Bridge1.LeaveIsland]
       intro Href
       simp [←Href] at *
@@ -348,10 +348,10 @@ def LeaveIsland₂ : ConvergentREvent Nat (Bridge1 ctx) (Bridge2 ctx) Unit Unit 
   newConvergentREvent'' Bridge1.LeaveIsland.toConvergentEvent.toAnticipatedEvent.toOrdinaryEvent {
     guard := fun b2 => b2.islandTL = Color.Green ∧ b2.nbOnIsland = 1
 
-    action := fun b2 => { b2 with nbFromIsland := b2.nbFromIsland + 1
-                                  nbOnIsland := b2.nbOnIsland - 1
-                                  islandTL := Color.Red
-                                  islandPass := true }
+    action := fun b2 _ => { b2 with nbFromIsland := b2.nbFromIsland + 1
+                                    nbOnIsland := b2.nbOnIsland - 1
+                                    islandTL := Color.Red
+                                    islandPass := true }
 
     safety := fun b2 => by
       simp [Machine.invariant, invariant₁, invariant₂, invariant₃, invariant₄, invariant₅]
@@ -385,7 +385,7 @@ def LeaveIsland₂ : ConvergentREvent Nat (Bridge1 ctx) (Bridge2 ctx) Unit Unit 
 
     simulation := fun b2 => by
       simp
-      intros _ _ _ am
+      intros _ _ am
       simp [Refinement.refine, refine, Bridge1.LeaveIsland]
       intro Href
       simp [←Href] at *
@@ -404,9 +404,9 @@ def MailandTLGreen : ConvergentRDetEvent Nat (Bridge1 ctx) (Bridge2 ctx) Unit Un
   newConcreteConvergentREvent'' {
     guard := fun b2 => b2.mainlandTL = Color.Red ∧ b2.nbToIsland + b2.nbOnIsland < ctx.maxCars ∧ b2.nbFromIsland = 0 ∧ b2.islandPass = true
 
-    action := fun b2 => { b2 with mainlandTL := Color.Green
-                                  islandTL := Color.Red
-                                  mainlandPass := false }
+    action := fun b2 _ => { b2 with mainlandTL := Color.Green
+                                    islandTL := Color.Red
+                                    mainlandPass := false }
 
     safety := fun b2 => by
       simp [Machine.invariant, invariant₁, invariant₂, invariant₃, invariant₄, invariant₅]
@@ -431,23 +431,19 @@ def IslandTLGreen : ConvergentRDetEvent Nat (Bridge1 ctx) (Bridge2 ctx) Unit Uni
   newConcreteConvergentREvent'' {
     guard := fun b2 => b2.islandTL = Color.Red ∧ b2.nbOnIsland > 0 ∧ b2.nbToIsland = 0 ∧ b2.mainlandPass = true
 
-    action := fun b2 => { b2 with mainlandTL := Color.Red
-                                  islandTL := Color.Green
-                                  islandPass := false }
+    action := fun b2 _ => { b2 with mainlandTL := Color.Red
+                                    islandTL := Color.Green
+                                    islandPass := false }
 
     safety := fun b2 => by
       simp [Machine.invariant, invariant₁, invariant₂, invariant₃, invariant₄, invariant₅]
-      intros Hinv₁ _ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hinv₇ Hgrd₁ Hgrd₂ Hgrd₃ Hgrd₄
-      simp [*] at *
-      assumption
+      intros ; simp [*] ; omega
 
     variant := fun b2 => (bval b2.mainlandPass) + (bval b2.islandPass)
 
     convergence := fun b2 => by
-      simp
-      intros Hinv Hgrd₁ _ _ _
-      simp [Machine.invariant, invariant₅] at Hinv
-      simp [Hgrd₁] at Hinv
+      intro Hinv ⟨Hgrd₁,_⟩
+      simp [Machine.invariant, invariant₅, Hgrd₁] at Hinv
       simp [Hinv]
 
     simulation := fun b2 => by simp [Refinement.refine, refine]

@@ -109,9 +109,9 @@ namespace ASys0
 
 /-- Initialization event: empty alarm system (no expert on duty). -/
 def Init : InitEvent (ASys0 ctx) Unit Unit := newInitEvent'' {
-  init := ASys0.reset
+  init _ := ASys0.reset
   safety := by
-    intro H ; clear H
+    intro H
     simp [Machine.invariant, ASys0.invariant₁, ASys0.invariant₂]
 }
 
@@ -119,7 +119,7 @@ def Init : InitEvent (ASys0 ctx) Unit Unit := newInitEvent'' {
 Note: the event is convergent. -/
 def AddExpert : ConvergentEvent Nat (ASys0 ctx) Expert Unit := newConvergentEvent' {
   guard := fun asys exp => exp ∉ asys.experts ∧ asys.experts.card < ctx.maxExperts ∧ ∀ exp' ∈ asys.experts, exp'.id ≠ exp.id
-  action := fun asys exp => { experts := asys.experts ∪ {exp} }
+  action := fun asys exp _ => { experts := asys.experts ∪ {exp} }
 
   safety := fun asys exp => by
     simp [Machine.invariant]

@@ -122,7 +122,7 @@ end Init
 
 /-- Initialization event: empty course system. -/
 def Init : InitEvent (M0 ctx) Unit Unit := newInitEvent'' {
-  init := Init.init
+  init _ := Init.init
   safety := by
     simp [Machine.invariant, M0.invariant₁, M0.invariant₂, Init.PO_safety₁, Init.PO_safety₂]
 }
@@ -241,7 +241,7 @@ end OpenCourses
 def OpenCourses : OrdinaryNDEvent (M0 ctx) Unit Unit :=
 newNDEvent'' {
   guard := OpenCourses.guard
-  effect := OpenCourses.effect
+  effect m _ := OpenCourses.effect m
   safety := fun m => by
     simp [Machine.invariant, -OpenCourses.guard, -OpenCourses.effect]
     intros Hinv₁ Hinv₂ Hgrd m' Hact
@@ -352,7 +352,7 @@ end CloseCourses
 def CloseCourses : ConvergentEvent Nat (M0 ctx) (Finset Course) Unit :=
 newConvergentEvent' {
   guard := CloseCourses.guard
-  action := CloseCourses.action
+  action := fun m cs _ => CloseCourses.action m cs
   safety := fun m => by
     simp [Machine.invariant, -CloseCourses.guard, -CloseCourses.action]
     intros Hinv₁ Hinv₂ Hgrd _

@@ -60,7 +60,7 @@ instance: Machine BufContext (B0 ctx) where
 /-- Initialization event (no parameter, empty buffer)-/
 def B0.Init : InitEvent (B0 ctx) Unit Unit :=
   newInitEvent'' {
-    init := { size := 0 }
+    init _ := { size := 0 }
     safety := fun _ => by simp [Machine.invariant]
   }
 
@@ -69,7 +69,7 @@ since we only track the number of elements)-/
 def B0.Put : OrdinaryEvent (B0 ctx) Unit Unit :=
   newEvent'' {
     guard := fun b0 => b0.size < ctx.maxSize
-    action := fun b0 => { size := b0.size + 1 }
+    action := fun b0 _ => { size := b0.size + 1 }
     safety := fun b0 => by exact fun _ Hgrd => Hgrd
   }
 
@@ -80,7 +80,7 @@ The Event is proved convergent.
 def B0.Fetch : ConvergentEvent Nat (B0 ctx) Unit Unit :=
   newConvergentEvent'' {
     guard := fun b0 => b0.size > 0
-    action := fun b0 => { size := b0.size - 1 }
+    action := fun b0 _ => { size := b0.size - 1 }
     safety := fun b0 => by
       simp [Machine.invariant]
       intros H _
@@ -94,7 +94,7 @@ def B0.Fetch : ConvergentEvent Nat (B0 ctx) Unit Unit :=
 /-- Event : querying the current size of the buffer. -/
 def B0.GetSize : OrdinaryEvent (B0 ctx) Unit Nat :=
   newEvent {
-    action := fun b0 () => (b0.size, b0)
+    action := fun b0 () _ => (b0.size, b0)
     safety := fun b0 () => by simp
   }
 
@@ -103,7 +103,7 @@ def B0.GetSize : OrdinaryEvent (B0 ctx) Unit Nat :=
 def B0.Batch : OrdinaryNDEvent (B0 ctx) Unit Unit :=
   newNDEvent'' {
     guard := fun b0 => b0.size < ctx.maxSize
-    effect := fun b0 b0' => ∃ n > 0, b0'.size = b0.size + n ∧ b0'.size ≤ ctx.maxSize
+    effect := fun b0 _ b0'  => ∃ n > 0, b0'.size = b0.size + n ∧ b0'.size ≤ ctx.maxSize
 
     feasibility := fun b0 => by
       simp [Machine.invariant]

@@ -40,14 +40,14 @@ instance: Machine Unit Button where
 def Button.Push : OrdinaryEvent Button Unit Unit :=
   newEvent'' {
     guard := fun st => ¬ st.pushed
-    action := fun _ => { pushed := true }
+    action := fun _ _ => { pushed := true }
     safety := fun st => by simp [Machine.invariant]
   }
 
 def Button.Release : OrdinaryEvent Button Unit Unit :=
   newEvent'' {
     guard := fun st => st.pushed
-    action := fun _ => { pushed := false }
+    action := fun _ _ => { pushed := false }
     safety := fun st => by simp [Machine.invariant]
   }
 
@@ -103,7 +103,7 @@ be added to the buffer if the button is pushed.
 def PB.PutBuf : OrdinaryREvent (B0 ctx) (PushBuffer ctx) Unit Unit :=
   newSREvent'' B0.Put {
     guard := fun (pb : PushBuffer ctx) => pb.size < ctx.maxSize ∧ pb.pushed
-    action := fun pb => { pb with size := pb.size + 1 }
+    action := fun pb _ => { pb with size := pb.size + 1 }
     safety := fun pb => by
       simp [Machine.invariant] ; intros ; assumption
     strengthening := fun pb => by
@@ -126,7 +126,7 @@ be pushed is the buffer is not full.
 def PB.Push : OrdinaryREvent Button (PushBuffer ctx) Unit Unit :=
   newREvent'' Button.Push {
     guard := fun st => ¬ st.pushed ∧ st.size < ctx.maxSize
-    action := fun st => { st with pushed := true }
+    action := fun st _ => { st with pushed := true }
     safety := fun st => by
       simp [Machine.invariant] ; intros ; assumption
     strengthening := fun st => by
