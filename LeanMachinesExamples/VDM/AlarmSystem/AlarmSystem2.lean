@@ -161,5 +161,6 @@ def RaiseAlarm : OrdinaryRDetEvent (ASys1 ctx) (ASys2 ctx) Alarm Unit :=
 
     simulation := fun asys alarm => by
       intros ; simp [FRefinement.lift]
+      rfl
 
   }
