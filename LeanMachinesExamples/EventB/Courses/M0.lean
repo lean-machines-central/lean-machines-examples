@@ -71,15 +71,15 @@ def M0.invariant₁ (m : M0 ctx) :=
 def M0.invariant₂ (m : M0 ctx)  :=
   m.openedCourses.card ≤  ctx.maxOpenedCourses
 
-/-- The reset (pre-init) state of the system. -/
+/-- The default (pre-init) state of the system. -/
 @[simp]
-def M0.reset (ctx : M0.Context) : M0 ctx := {openedCourses := ∅}
+def M0.default (ctx : M0.Context) : M0 ctx := {openedCourses := ∅}
 
 /-- Specification of the abstract Courses machine. -/
 instance: Machine M0.Context (M0 ctx) where
   context := ctx
   invariant m := M0.invariant₁ m ∧ M0.invariant₂ m
-  reset := M0.reset ctx
+  default := M0.default ctx
 
 namespace M0
 

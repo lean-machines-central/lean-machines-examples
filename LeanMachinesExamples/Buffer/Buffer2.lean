@@ -40,7 +40,7 @@ structure B2 (ctx : BufContext) (α : Type) where
 instance: Machine BufContext (B2 ctx α) where
   context := ctx
   invariant b2 := b2.data.length ≤ ctx.maxSize
-  reset := { data := [] }
+  default := { data := [] }
 
 /-!
 Since elements are present both a the concrete and the abstract level,

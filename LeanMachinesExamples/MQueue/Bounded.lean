@@ -15,7 +15,7 @@ namespace Bounded
 instance: Machine BoundedCtx (Bounded ctx) where
   context := ctx
   invariant m := m.count ≤ ctx.maxCount
-  reset := { count := 0 }
+  default := { count := 0 }
 
 def Init : InitEvent (Bounded ctx) Unit Unit :=
   newInitEvent'' {

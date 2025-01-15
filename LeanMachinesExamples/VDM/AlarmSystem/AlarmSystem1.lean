@@ -54,8 +54,8 @@ def ASys1.invariant₃ (asys : ASys1 ctx) :=
 instance: Machine ASys1.Context (ASys1 ctx) where
   context := ctx
   invariant asys := ASys1.invariant₁ asys ∧ ASys1.invariant₂ asys ∧ ASys1.invariant₃ asys
-  reset := { toASys0 := ASys0.reset
-             schedule := fun _ => ∅}
+  default := { toASys0 := default
+               schedule := fun _ => ∅}
 
 /-- The specification of correct strong functional refinement of
 the abstract machine `ASys0`. -/
@@ -75,10 +75,10 @@ namespace ASys1
 
 /-- Initialization event: empty alarm system (no expert, no scheduled period). -/
 def Init : InitEvent (ASys1 ctx) Unit Unit := newInitEvent'' {
-  init _ := Machine.reset
+  init _ := default
   safety := by
     intro H
-    simp [Machine.reset, Machine.invariant, ASys1.invariant₁, ASys1.invariant₂
+    simp [default, Machine.invariant, ASys1.invariant₁, ASys1.invariant₂
     , ASys1.invariant₃, ASys0.invariant₁, ASys0.invariant₂]
 }
 

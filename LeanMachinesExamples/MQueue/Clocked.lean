@@ -131,7 +131,7 @@ structure Clocked where
 instance: Machine EmptyCtx Clocked where
   context := {}
   invariant := fun _ => True
-  reset := { clock := 0 }
+  default := { clock := 0 }
 
 def Init : InitEvent Clocked Unit Unit :=
   newInitEvent'' {

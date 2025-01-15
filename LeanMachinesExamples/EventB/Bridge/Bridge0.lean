@@ -60,7 +60,7 @@ def Bridge0.invariant (b0 : Bridge0 ctx) : Prop :=
 instance: Machine Context (Bridge0 ctx) where
   context := ctx
   invariant m := Bridge0.invariant m
-  reset := { nbCars := 0 }
+  default := { nbCars := 0 }
 
 namespace Bridge0
 

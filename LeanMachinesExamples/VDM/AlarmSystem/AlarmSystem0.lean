@@ -95,21 +95,21 @@ def ASys0.invariant₂ (asys : ASys0 ctx) : Prop :=
   ∀ exp₁ ∈ asys.experts, ∀ exp₂ ∈ asys.experts,
     exp₁ ≠ exp₂ → exp₁.id ≠ exp₂.id
 
-/-- The reset state of the abstract system: no expert on-duty. -/
+/-- The default state of the abstract system: no expert on-duty. -/
 @[simp]
-def ASys0.reset : ASys0 ctx := { experts := ∅ }
+def ASys0.default : ASys0 ctx := { experts := ∅ }
 
 /-- The machine specification of the abstract alarm system. -/
 instance: Machine ASys0.Context (ASys0 ctx) where
   context := ctx
   invariant asys := ASys0.invariant₁ asys ∧ ASys0.invariant₂ asys
-  reset := ASys0.reset
+  default := ASys0.default
 
 namespace ASys0
 
 /-- Initialization event: empty alarm system (no expert on duty). -/
 def Init : InitEvent (ASys0 ctx) Unit Unit := newInitEvent'' {
-  init _ := ASys0.reset
+  init _ := ASys0.default
   safety := by
     intro H
     simp [Machine.invariant, ASys0.invariant₁, ASys0.invariant₂]

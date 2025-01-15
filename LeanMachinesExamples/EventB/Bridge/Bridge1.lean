@@ -43,7 +43,7 @@ def Bridge1.invariant₂ (b : Bridge1 ctx) := b.nbFromIsland = 0 ∨ b.nbToIslan
 instance: Machine Context (Bridge1 ctx) where
   context := ctx
   invariant b := b.invariant₁ ∧ b.invariant₂
-  reset := ⟨0, 0, 0⟩
+  default := ⟨0, 0, 0⟩
 
 /-- The refine (a.k.a "glue") invariant connecting the concrete bridge
 to the abstract one. -/

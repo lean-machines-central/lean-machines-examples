@@ -50,7 +50,7 @@ instance [instDec: DecidableEq α]: Machine MQContext (MQ1 α (instDec:=instDec)
                   ∧ (∀ msg ∈ mq.messages, msg.timestamp < mq.clock)
                   ∧ (∀ msg₁ ∈ mq.messages, ∀ msg₂ ∈ mq.messages, msg₁.timestamp = msg₂.timestamp → msg₁ = msg₂)
                   ∧ (∀ msg ∈ mq.messages, ctx.minPrio ≤ msg.prio ∧ msg.prio ≤ ctx.maxPrio)
-  reset := { messages := ∅, clock := 0}
+  default := { messages := ∅, clock := 0}
 
 theorem MQ1.clock_free [DecidableEq α] (mq : MQ1 α ctx):
   Machine.invariant mq → ∀ x, ∀ p, ⟨⟨x, mq.clock⟩, p⟩ ∉ mq.messages :=

@@ -72,7 +72,7 @@ instance: Machine Context (Bridge2 ctx) where
                  ∧ Machine.invariant b.toBridge1
                    -- this is handy in case of superposition, instead of putting the
                    -- glue in the refine predicate
-  reset := let r1 : Bridge1 ctx := Machine.reset
+  default := let r1 : Bridge1 ctx := default
            { r1 with mainlandTL := Color.Red
                      mainlandPass := false
                      islandTL := Color.Red

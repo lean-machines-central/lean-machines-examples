@@ -37,7 +37,7 @@ instance [instDec: DecidableEq α]: Machine BoundedCtx (MQ0 α (instDec:=instDec
   invariant mq := mq.messages.card ≤ ctx.maxCount
                   ∧ (∀ msg ∈ mq.messages, msg.timestamp < mq.clock)
                   ∧ (∀ msg₁ ∈ mq.messages, ∀ msg₂ ∈ mq.messages, msg₁.timestamp = msg₂.timestamp → msg₁ = msg₂)
-  reset := { messages := ∅, clock := 0}
+  default := { messages := ∅, clock := 0}
 
 theorem MQ0.clock_free [DecidableEq α] (mq : MQ0 α ctx):
   Machine.invariant mq → ∀ x, ⟨x, mq.clock⟩ ∉ mq.messages :=

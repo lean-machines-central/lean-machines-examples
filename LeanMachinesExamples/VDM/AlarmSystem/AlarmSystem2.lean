@@ -48,8 +48,8 @@ def ASys2.invariant₂ (asys : ASys2 ctx) :=
 instance: Machine ASys1.Context (ASys2 ctx) where
   context := ctx
   invariant asys := ASys2.invariant₁ asys ∧ ASys2.invariant₂ asys
-  reset := { toASys1 := Machine.reset
-             alarms := [] }
+  default := { toASys1 := default
+               alarms := [] }
 
 /-- The specification of correct strong functional refinement. -/
 instance: SRefinement  (ASys1 ctx) (ASys2 ctx) where
@@ -68,10 +68,10 @@ namespace ASys2
 /-- Initialization event: empty alarm system (no expert, no scheduled period, no alarm).
 Refinement of `Asys1.Init`.-/
 def Init : InitEvent (ASys2 ctx) Unit Unit := newInitEvent'' {
-  init _ := Machine.reset
+  init _ := default
   safety := by
     intro H
-    simp [Machine.reset, Machine.invariant
+    simp [default, Machine.invariant
          , ASys0.invariant₁, ASys0.invariant₂, ASys1.invariant₂, ASys1.invariant₃
          , ASys2.invariant₂]
 }

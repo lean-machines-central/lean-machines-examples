@@ -35,7 +35,7 @@ structure Button where
 instance: Machine Unit Button where
   context := ()
   invariant _ := True
-  reset := { pushed := false }
+  default := { pushed := false }
 
 def Button.Push : OrdinaryEvent Button Unit Unit :=
   newEvent'' {
@@ -64,13 +64,13 @@ structure PushBuffer (ctx : BufContext)
   extends B0 ctx, Button where
 
 /-!
-Of course the machine itself merges the invariants and reset states.
+Of course the machine itself merges the invariants and default states.
 -/
 
 instance: Machine BufContext (PushBuffer ctx) where
   context := ctx
   invariant := fun pb => Machine.invariant pb.toB0 ∧ Machine.invariant pb.toButton
-  reset := { toB0 := Machine.reset, toButton := Machine.reset }
+  default := { toB0 := default, toButton := default }
 
 /-!
 Now we are at the interesting place, with the definition of two
