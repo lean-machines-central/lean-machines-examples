@@ -35,7 +35,7 @@ structure Button where
 instance: Machine Unit Button where
   context := ()
   invariant _ := True
-  reset := { pushed := false }
+  default := { pushed := false }
 
 def Button.Push : OrdinaryEvent Button Unit Unit :=
   newEvent'' {
@@ -64,13 +64,13 @@ structure PushBuffer (ctx : BufContext)
   extends B0 ctx, Button where
 
 /-!
-Of course the machine itself merges the invariants and reset states.
+Of course the machine itself merges the invariants and default states.
 -/
 
 instance: Machine BufContext (PushBuffer ctx) where
   context := ctx
   invariant := fun pb => Machine.invariant pb.toB0 ∧ Machine.invariant pb.toButton
-  reset := { toB0 := Machine.reset, toButton := Machine.reset }
+  default := { toB0 := default, toButton := default }
 
 /-!
 Now we are at the interesting place, with the definition of two
@@ -83,14 +83,14 @@ instance: SRefinement (B0 ctx) (PushBuffer ctx) where
   unlift := fun pb b0' => { pb with toB0 := b0' }
   lift_safe := fun pb => by simp [Machine.invariant]
   lift_unlift := fun pb b0' => by simp [Machine.invariant]
-  lu_reset := fun b0' => by simp [Machine.invariant]
+  lu_default := fun b0' => by simp [Machine.invariant]
 
 instance: SRefinement Button (PushBuffer ctx) where
   lift := fun pb => pb.toButton
   unlift := fun pb pb0' => { pb with toButton := pb0' }
   lift_safe := fun pb => by simp [Machine.invariant]
   lift_unlift := fun pb b0' => by simp [Machine.invariant]
-  lu_reset := fun b0' => by simp [Machine.invariant]
+  lu_default := fun b0' => by simp [Machine.invariant]
 
 /-!
 Of course, events from both "parents" can be refined as well.

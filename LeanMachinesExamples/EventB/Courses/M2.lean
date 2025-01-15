@@ -47,9 +47,9 @@ def M2.invariant₄ (m2 : M2 ctx) :=
 def M2.invariant₅ (m2 : M2 ctx) :=
   ∀ c, ∀ m, m ∈ m2.attendants c → ctx.instr_fun c ≠ m
 
-/-- Reset states for second Courses system refinement: no attendant. -/
+/-- default states for second Courses system refinement: no attendant. -/
 @[simp]
-def M2.reset : M2 ctx :=
+def M2.default : M2 ctx :=
   { domain := ∅,
     attendants := fun _ => ∅ }
 
@@ -57,7 +57,7 @@ def M2.reset : M2 ctx :=
 instance: Machine M2.Context (M2 ctx) where
   context := ctx
   invariant m := M2.invariant₁ m ∧ M2.invariant₂ m ∧ M2.invariant₃ m ∧ M2.invariant₄ m ∧ M2.invariant₅ m
-  reset := M2.reset
+  default := M2.default
 
 /-- Refine invariant: the domain *is* the set of (abstract) opened courses. -/
 def M2.refine₁ (m1 : M1 ctx.toContext_1) (m2 : M2 ctx) :=

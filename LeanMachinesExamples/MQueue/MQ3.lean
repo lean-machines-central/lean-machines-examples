@@ -579,7 +579,7 @@ instance [instDec: DecidableEq α]: Machine MQContext (MQ3 α (instDec:=instDec)
                   ∧ (∀ msg ∈ mq.queue, ctx.minPrio ≤ msg.prio ∧ msg.prio ≤ ctx.maxPrio)
                   ∧ mq.queue.Nodup
                   ∧ mq.sigs.Sorted (·≥·)
-  reset := { queue := [], clock := 0}
+  default := { queue := [], clock := 0}
 
 theorem MQ3.clock_free [DecidableEq α] (mq : MQ3 α ctx):
   Machine.invariant mq → ∀ x, ∀ p, ⟨⟨x, mq.clock⟩, p⟩ ∉ mq.messages :=

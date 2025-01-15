@@ -78,10 +78,10 @@ by
 def M1.invariant₂ (m : M1 ctx) : Prop :=
   ∀ i ∈ m.inscriptions, ctx.instr_fun i.1 ≠ i.2
 
-/-- The reset state of the Courses system (first refinement). -/
+/-- The default state of the Courses system (first refinement). -/
 @[simp]
-def M1.reset : M1 ctx :=
-  let m0 := M0.reset ctx.toContext
+def M1.default : M1 ctx :=
+  let m0 := M0.default ctx.toContext
   { m0 with inscriptions := ∅ }
 
 /-- Specification of the first refined machine of the Courses system. -/
@@ -89,7 +89,7 @@ instance: Machine M1.Context (M1 ctx) where
   context := ctx
   invariant m := M0.invariant₁ m.toM0 ∧ M0.invariant₂ m.toM0
                  ∧ M1.invariant₁ m ∧ M1.invariant₂ m
-  reset := M1.reset
+  default := M1.default
 
 /-!
 While Event-B relies on relational refinement principles, we illustrate here
@@ -138,7 +138,7 @@ instance: SRefinement (M0 ctx.toContext) (M1 ctx) where
   unlift := M1.unlift
   lift_unlift m am' := by simp
 
-  lu_reset am' := by simp
+  lu_default am' := by simp
 
 /-!
 ## Events

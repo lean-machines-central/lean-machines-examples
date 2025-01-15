@@ -148,7 +148,7 @@ structure Prioritized (ctx : PrioCtx) where
 instance: Machine PrioCtx (Prioritized ctx) where
   context := ctx
   invariant := fun m => ∀ p ∈ m.priorities, ctx.minPrio ≤ p ∧ p ≤ ctx.maxPrio
-  reset := { priorities := ∅ }
+  default := { priorities := ∅ }
 
 def Init : InitEvent (Prioritized ctx) Unit Unit :=
   newInitEvent'' {

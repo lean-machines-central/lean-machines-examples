@@ -31,7 +31,7 @@ instance [instDec: DecidableEq α]: Machine MQContext (MQ4 α (instDec:=instDec)
                   ∧ (∀ msg ∈ mq.queue, ctx.minPrio ≤ msg.prio ∧ msg.prio ≤ ctx.maxPrio)
                   ∧ mq.queue.toList.Nodup
                   ∧ mq.sigs.Sorted (·≥·)
-  reset := { queue := #[], clock := 0}
+  default := { queue := #[], clock := 0}
 
 instance [DecidableEq α]: SRefinement (MQ3 α ctx) (MQ4 α ctx) where
   lift := MQ4.lift
@@ -53,8 +53,8 @@ instance [DecidableEq α]: SRefinement (MQ3 α ctx) (MQ4 α ctx) where
     · exact Hinv₆
 
   unlift := MQ4.unlift
-  lu_reset mq := by
-    simp [FRefinement.lift, Machine.reset, MQ4.unlift]
+  lu_default mq := by
+    simp [FRefinement.lift, default, MQ4.unlift]
     simp [MQ4.lift]
   lift_unlift mq amq := by
     simp [FRefinement.lift, MQ4.unlift, MQ4.lift]

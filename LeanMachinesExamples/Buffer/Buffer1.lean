@@ -28,7 +28,7 @@ structure B1 (ctx : BufContext) (α : Type) where
 instance: Machine BufContext (B1 ctx α) where
   context := ctx
   invariant b1 := b1.data.length ≤ ctx.maxSize
-  reset := { data := [] }
+  default := { data := [] }
 
 /-! We use the functional refinement principles of
 LeanMachines, hence we need a way to *lift* the

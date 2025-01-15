@@ -40,7 +40,7 @@ structure B2 (ctx : BufContext) (α : Type) where
 instance: Machine BufContext (B2 ctx α) where
   context := ctx
   invariant b2 := b2.data.length ≤ ctx.maxSize
-  reset := { data := [] }
+  default := { data := [] }
 
 /-!
 Since elements are present both a the concrete and the abstract level,
@@ -108,7 +108,7 @@ instance [DecidableEq α]: SRefinement (B1 ctx α) (B2 ctx α) where
   lift_unlift b2 b1' := by
     simp [Machine.invariant, injectLow_map_prop]
 
-  lu_reset b1' := by
+  lu_default b1' := by
     simp [Machine.invariant, injectLow_map_prop]
 
 /-- Event: initialization of an empty buffer, refining `B1.Init`. -/
