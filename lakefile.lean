@@ -12,5 +12,5 @@ lean_exe «lean-machines-examples» where
   root := `Main
 
 require «lean-machines» from git
-  "https://github.com/lean-machines-central/lean-machines.git" @ "inhabited_state"
+  "https://github.com/lean-machines-central/lean-machines.git" @ "main"
 
