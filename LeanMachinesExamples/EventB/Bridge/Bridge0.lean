@@ -66,14 +66,14 @@ namespace Bridge0
 
 /-- Initialization event: empty bridge -/
 def Init : InitEvent (Bridge0 ctx) Unit Unit := newInitEvent'' {
-  init := { nbCars := 0 }
+  init _ := { nbCars := 0 }
   safety := by simp [Machine.invariant]
 }
 
 /-- Event: a new car enters the Bridge from mainland. -/
 def EnterFromMainland : OrdinaryEvent (Bridge0 ctx) Unit Unit := newEvent'' {
   guard := fun m => m.nbCars < ctx.maxCars
-  action := fun m => { nbCars := m.nbCars + 1}
+  action := fun m _ => { nbCars := m.nbCars + 1}
   safety := fun m => by
     simp [Machine.invariant]
     intros _ Hgrd
@@ -84,7 +84,7 @@ def EnterFromMainland : OrdinaryEvent (Bridge0 ctx) Unit Unit := newEvent'' {
 /-- Event: a car exits the Bridge towards the mainland. -/
 def LeaveToMainland : OrdinaryEvent (Bridge0 ctx) Unit Unit := newEvent'' {
   guard := fun m => m.nbCars > 0
-  action := fun m => { nbCars := m.nbCars - 1}
+  action := fun m _ => { nbCars := m.nbCars - 1}
   safety := fun m => by
     simp [Machine.invariant]
     intros Hinv _  -- remark : 0 - 1 = 0

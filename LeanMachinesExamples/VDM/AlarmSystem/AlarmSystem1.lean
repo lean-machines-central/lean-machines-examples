@@ -75,9 +75,9 @@ namespace ASys1
 
 /-- Initialization event: empty alarm system (no expert, no scheduled period). -/
 def Init : InitEvent (ASys1 ctx) Unit Unit := newInitEvent'' {
-  init := Machine.reset
+  init _ := Machine.reset
   safety := by
-    intro H ; clear H
+    intro H
     simp [Machine.reset, Machine.invariant, ASys1.invariant₁, ASys1.invariant₂
     , ASys1.invariant₃, ASys0.invariant₁, ASys0.invariant₂]
 }
@@ -159,7 +159,7 @@ newConcreteSREvent' {
   guard := fun asys (per, exp) => AssignExpert.guard₁ asys per
                                   ∧ AssignExpert.guard₂ asys exp
                                   ∧ AssignExpert.guard₃ asys per exp
-  action := fun asys (per, exp) => AssignExpert.action asys per exp
+  action := fun asys (per, exp) _ => AssignExpert.action asys per exp
 
   safety := fun asys (per, exp) => by
     simp [Machine.invariant]

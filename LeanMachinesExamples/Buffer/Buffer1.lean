@@ -56,7 +56,7 @@ instance: FRefinement (B0 ctx) (B1 ctx α) where
 /-- Event: Initialization of the buffer, refining `B0.Init`. -/
 def B1.Init : InitREvent (B0 ctx) (B1 ctx α) Unit Unit :=
   newInitFREvent'' B0.Init {
-    init := { data := [] }
+    init _ := { data := [] }
     safety := fun _ => by simp [Machine.invariant]
     strengthening := by simp [B0.Init]
     simulation := by simp [FRefinement.lift, B0.Init]
@@ -69,7 +69,7 @@ The event is proved convergent.
 def B1.Put : ConvergentREvent Nat (B0 ctx) (B1 ctx α) α Unit Unit Unit :=
   newConvergentFREvent' B0.Put {
     guard := fun b1 _ => b1.data.length < ctx.maxSize
-    action := fun b1 x => { data := x :: b1.data }
+    action := fun b1 x _ => { data := x :: b1.data }
 
     lift_in := fun _ => ()
 
@@ -101,7 +101,7 @@ The event is proved convergent.
 def B1.PutLast : ConvergentREvent Nat (B0 ctx) (B1 ctx α) α Unit Unit Unit :=
   newConvergentFREvent' B0.Put {
     guard := fun b1 _ => b1.data.length < ctx.maxSize
-    action := fun b1 x => { data := b1.data ++ [x] }
+    action := fun b1 x _ => { data := b1.data ++ [x] }
 
     lift_in := fun _ => ()
 
@@ -129,7 +129,7 @@ The event is convergent.
 def B1.Fetch : ConvergentRNDEvent Nat (B0 ctx) (B1 ctx α) Unit α Unit Unit :=
   newConvergentFRNDEvent B0.Fetch.toOrdinaryEvent.toOrdinaryNDEvent {
     guard := fun b1 _ => b1.data.length > 0
-    effect := fun b1 _ (y, b1') =>
+    effect := fun b1 _ _ (y, b1') =>
       y ∈ b1.data ∧ b1'.data.length = b1.data.length - 1
     safety := fun b1 _ => by simp [Machine.invariant] ; omega
     feasibility := fun b1 _ => by
@@ -154,7 +154,7 @@ The parameter is the list `xs` of elements to add.
 def B1.Batch : ConvergentRDetEvent Nat (B0 ctx) (B1 ctx α) (List α) Unit Unit Unit :=
   newConvergentRDetEvent' B0.Batch {
     guard := fun b1 xs => xs.length > 0 ∧ b1.data.length + xs.length ≤ ctx.maxSize
-    action := fun b1 xs => { data := b1.data ++ xs }
+    action := fun b1 xs _ => { data := b1.data ++ xs }
     lift_in := fun _ => ()
     safety := fun b1 xs => by simp [Machine.invariant]
     strengthening := fun b1 xs => by
@@ -184,7 +184,7 @@ def B1.Batch : ConvergentRDetEvent Nat (B0 ctx) (B1 ctx α) (List α) Unit Unit 
 -/
 def B1.GetSize : OrdinaryREvent (B0 ctx) (B1 ctx α) Unit Nat :=
   newREvent B0.GetSize {
-    action := fun b1 _ => (b1.data.length, b1)
+    action := fun b1 _ _ => (b1.data.length, b1)
     lift_in := fun x => x
     lift_out := fun n => n
     safety := fun b1 _ => by simp

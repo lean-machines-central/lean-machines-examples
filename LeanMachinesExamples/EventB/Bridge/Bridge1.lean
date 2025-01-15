@@ -79,7 +79,7 @@ namespace Bridge1
 /-- Initialization event: empty bridge (refinement of `Bridge0.Init`). -/
 def Init : InitREvent (Bridge0 ctx) (Bridge1 ctx) Unit Unit :=
   newInitREvent'' Bridge0.Init {
-    init := ⟨0, 0, 0⟩
+    init _ := ⟨0, 0, 0⟩
     safety := by simp [Machine.invariant]
     strengthening := by simp [Bridge0.Init]
     simulation := by simp [Bridge0.Init, Refinement.refine]
@@ -89,7 +89,7 @@ def Init : InitREvent (Bridge0 ctx) (Bridge1 ctx) Unit Unit :=
 def EnterFromMainland : OrdinaryREvent (Bridge0 ctx) (Bridge1 ctx) Unit Unit :=
   newREvent'' Bridge0.EnterFromMainland {
     guard := fun b1 => b1.totalCars < ctx.maxCars ∧ b1.nbFromIsland = 0
-    action := fun b1 => { b1 with nbToIsland := b1.nbToIsland + 1 }
+    action := fun b1 _ => { b1 with nbToIsland := b1.nbToIsland + 1 }
     safety := fun b1 => by
       simp [Machine.invariant]
       intros _ _ Hgrd₁ Hgrd₂
@@ -109,7 +109,7 @@ def EnterFromMainland : OrdinaryREvent (Bridge0 ctx) (Bridge1 ctx) Unit Unit :=
 def LeaveToMainland : OrdinaryREvent (Bridge0 ctx) (Bridge1 ctx) Unit Unit :=
   newREvent'' Bridge0.LeaveToMainland {
     guard := fun b1 => b1.nbFromIsland > 0
-    action := fun b1 => { b1 with nbFromIsland := b1.nbFromIsland - 1 }
+    action := fun b1 _ => { b1 with nbFromIsland := b1.nbFromIsland - 1 }
     safety := fun b1 => by
       simp [Machine.invariant]
       intros Hinv₁ Hinv₂ Hgrd
@@ -133,7 +133,7 @@ is not enforced in LeanMachines (cf. discussion in the framework implementation)
 def EnterIsland : ConvergentRDetEvent Nat (Bridge0 ctx) (Bridge1 ctx) Unit Unit :=
   newConcreteConvergentREvent'' {
     guard := fun b1 => b1.nbToIsland > 0
-    action := fun b1 => ⟨b1.nbToIsland - 1, b1.nbOnIsland + 1, b1.nbFromIsland⟩
+    action := fun b1 _ => ⟨b1.nbToIsland - 1, b1.nbOnIsland + 1, b1.nbFromIsland⟩
     safety := fun b1 => by
       simp [Machine.invariant]
       intros Hinv₁ Hinv₂ Hgrd
@@ -152,7 +152,7 @@ def EnterIsland : ConvergentRDetEvent Nat (Bridge0 ctx) (Bridge1 ctx) Unit Unit 
 def LeaveIsland : ConvergentRDetEvent Nat (Bridge0 ctx) (Bridge1 ctx) Unit Unit :=
   newConcreteConvergentREvent'' {
     guard := fun b1 => b1.nbOnIsland > 0 ∧ b1.nbToIsland = 0
-    action := fun b1 => ⟨b1.nbToIsland, b1.nbOnIsland - 1, b1.nbFromIsland + 1⟩
+    action := fun b1 _ => ⟨b1.nbToIsland, b1.nbOnIsland - 1, b1.nbFromIsland + 1⟩
     safety := fun b1 => by
       simp [Machine.invariant]
       intros Hinv₁ _ Hgrd₁ Hgrd₂

@@ -663,7 +663,7 @@ instance [instDec: DecidableEq α] : Refinement (MQ2 α ctx) (MQ3 α ctx) where
 
 def MQ3.Init [instDec: DecidableEq α] : InitREvent (MQ2 α ctx) (MQ3 α ctx) Unit Unit :=
   newInitREvent'' MQ2.Init.toInitEvent {
-    init := { queue := [], clock := 0}
+    init _ := { queue := [], clock := 0}
     safety _ := by simp [Machine.invariant]
     strengthening _ := by simp [Machine.invariant, MQ2.Init]
     simulation _ := by simp [Machine.invariant, Refinement.refine, MQ2.Init, FRefinement.lift]
@@ -779,12 +779,12 @@ def MQ3.Enqueue [DecidableEq α]: OrdinaryREvent (MQ2 α ctx) (MQ3 α ctx) (α �
   newREvent' MQ2.Enqueue.toOrdinaryEvent {
     guard := MQ3.enqueue_guard
 
-    action := MQ3.enqueue_action
+    action mq ps _ := MQ3.enqueue_action mq ps
 
     safety := fun mq (x, px) => by
-      intro Hinv
+      intro Hinv Hgrd
       have Hclk := MQ3.clock_free mq Hinv
-      revert Hinv
+      revert Hgrd Hinv
       simp [Machine.invariant, MQ3.enqueue_guard, MQ3.enqueue_action]
       intro Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hgrd₁ Hgrd₂ Hgrd₃
       constructor
@@ -955,9 +955,8 @@ def MQ3.Dequeue [DecidableEq α] [Inhabited α]: OrdinaryRDetEvent (MQ2 α ctx) 
     lift_out := id
     guard (mq : MQ3 α ctx) _ := mq.queue ≠ []
 
-    action (mq : MQ3 α ctx) _ :=
-      let msg := if hq: mq.queue ≠ [] then mq.queue.head hq
-                 else errMessage
+    action (mq : MQ3 α ctx) x  grd :=
+      let msg := mq.queue.head grd
       ((msg.payload, msg.prio), {mq with queue := mq.queue.tail})
 
     safety mq _ := by
@@ -992,7 +991,6 @@ def MQ3.Dequeue [DecidableEq α] [Inhabited α]: OrdinaryRDetEvent (MQ2 α ctx) 
     simulation mq _ := by
       simp [Machine.invariant, Refinement.refine, MQ2.Dequeue]
       intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hgrd amq Href₁ Href₂
-      simp [Hgrd]
       exists {clock := amq.clock, queue := amq.queue.erase (mq.queue.head Hgrd)}
       have Hmq: mq.queue = (mq.queue.head Hgrd) :: mq.queue.tail := by
           exact Eq.symm (List.head_cons_tail mq.queue Hgrd)

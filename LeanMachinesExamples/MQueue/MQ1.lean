@@ -74,7 +74,7 @@ instance [instDec: DecidableEq α] : FRefinement (MQ0 α ctx.toBoundedCtx) (MQ1 
 
 def MQ1.Init [instDec: DecidableEq α] : InitREvent (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) Unit Unit :=
   newInitREvent'' MQ0.Init.toInitEvent {
-    init := { messages := ∅, clock := 0}
+    init _ := { messages := ∅, clock := 0}
     safety _ := by simp [Machine.invariant]
     strengthening _ := by simp [Machine.invariant, MQ0.Init]
     simulation _ := by simp [Machine.invariant, Refinement.refine, MQ0.Init, FRefinement.lift]
@@ -85,7 +85,7 @@ def MQ1.Enqueue [DecidableEq α] : OrdinaryREvent (MQ0 α ctx.toBoundedCtx) (MQ1
     lift_in := fun (x, _) => x
     guard := fun mq (x, px) => mq.messages.card < ctx.maxCount
                                ∧ ctx.minPrio ≤ px ∧ px ≤ ctx.maxPrio
-    action := fun mq (x, px) =>
+    action := fun mq (x, px) _  =>
                 { messages := mq.messages ∪ {⟨⟨x, mq.clock⟩, px⟩},
                   clock := mq.clock + 1 }
 
@@ -291,7 +291,7 @@ def MQ1.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (M
     lift_in := id
     lift_out := fun (x, _) => x
     guard mq _ := mq.messages ≠ ∅
-    effect := fun mq _ ((y, py), mq') =>
+    effect := fun mq _ _ ((y, py), mq') =>
                 ∃ msg ∈ mq.messages, y = msg.payload ∧ py = msg.prio
                                      ∧ mq' = {mq with messages := mq.messages \ {msg}}
                                      ∧ ∀ msg' ∈ mq.messages, msg' ≠ msg → msg'.prio ≤ msg.prio

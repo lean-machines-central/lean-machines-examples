@@ -68,9 +68,9 @@ namespace ASys2
 /-- Initialization event: empty alarm system (no expert, no scheduled period, no alarm).
 Refinement of `Asys1.Init`.-/
 def Init : InitEvent (ASys2 ctx) Unit Unit := newInitEvent'' {
-  init := Machine.reset
+  init _ := Machine.reset
   safety := by
-    intro H ; clear H
+    intro H
     simp [Machine.reset, Machine.invariant
          , ASys0.invariant₁, ASys0.invariant₂, ASys1.invariant₂, ASys1.invariant₃
          , ASys2.invariant₂]
@@ -145,7 +145,7 @@ def RaiseAlarm : OrdinaryRDetEvent (ASys1 ctx) (ASys2 ctx) Alarm Unit :=
   newConcreteSREvent' {
     guard := fun asys alarm =>
                ∃ exp ∈ asys.schedule alarm.period, exp.quali = alarm.quali
-    action := fun asys alarm => { asys with alarms := alarm :: asys.alarms }
+    action := fun asys alarm _ => { asys with alarms := alarm :: asys.alarms }
 
     safety := fun asys alarm => by
       intro Hinv
