@@ -69,7 +69,7 @@ instance: SRefinement  (ASys0 ctx.toContext) (ASys1 ctx) where
   unlift asys1 asys0' := { experts := asys0'.experts
                            schedule := asys1.schedule }
   lift_unlift asys1 asys0' := by simp
-  lu_reset asys0' := by simp
+  lu_default asys0' := by simp
 
 namespace ASys1
 

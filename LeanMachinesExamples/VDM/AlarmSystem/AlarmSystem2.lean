@@ -61,7 +61,7 @@ instance: SRefinement  (ASys1 ctx) (ASys2 ctx) where
                            alarms := asys2.alarms }
 
   lift_unlift asys2 asys1' := by simp
-  lu_reset asys1' := by simp
+  lu_default asys1' := by simp
 
 namespace ASys2
 

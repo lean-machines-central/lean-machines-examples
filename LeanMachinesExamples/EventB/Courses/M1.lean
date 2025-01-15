@@ -138,7 +138,7 @@ instance: SRefinement (M0 ctx.toContext) (M1 ctx) where
   unlift := M1.unlift
   lift_unlift m am' := by simp
 
-  lu_reset am' := by simp
+  lu_default am' := by simp
 
 /-!
 ## Events

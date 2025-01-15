@@ -53,7 +53,7 @@ instance [DecidableEq α]: SRefinement (MQ3 α ctx) (MQ4 α ctx) where
     · exact Hinv₆
 
   unlift := MQ4.unlift
-  lu_reset mq := by
+  lu_default mq := by
     simp [FRefinement.lift, default, MQ4.unlift]
     simp [MQ4.lift]
   lift_unlift mq amq := by

@@ -83,14 +83,14 @@ instance: SRefinement (B0 ctx) (PushBuffer ctx) where
   unlift := fun pb b0' => { pb with toB0 := b0' }
   lift_safe := fun pb => by simp [Machine.invariant]
   lift_unlift := fun pb b0' => by simp [Machine.invariant]
-  lu_reset := fun b0' => by simp [Machine.invariant]
+  lu_default := fun b0' => by simp [Machine.invariant]
 
 instance: SRefinement Button (PushBuffer ctx) where
   lift := fun pb => pb.toButton
   unlift := fun pb pb0' => { pb with toButton := pb0' }
   lift_safe := fun pb => by simp [Machine.invariant]
   lift_unlift := fun pb b0' => by simp [Machine.invariant]
-  lu_reset := fun b0' => by simp [Machine.invariant]
+  lu_default := fun b0' => by simp [Machine.invariant]
 
 /-!
 Of course, events from both "parents" can be refined as well.
