@@ -20,14 +20,16 @@ instance: Machine BoundedCtx (Bounded ctx) where
 def Init : InitEvent (Bounded ctx) Unit Unit :=
   newInitEvent'' {
     init _ := { count := 0 }
-    safety := fun _ => by simp [Machine.invariant]
+    safety _ := by simp [Machine.invariant]
   }
 
 def Incr : OrdinaryEvent (Bounded ctx) Unit Unit :=
   newEvent'' {
     guard m := m.count < ctx.maxCount
     action m _ := { m with count := m.count + 1 }
-    safety := fun m => by simp [Machine.invariant] ; intro _ Hgrd ; exact Hgrd
+    safety m := by simp [Machine.invariant]
+                   intro Hinv Hgrd
+                   exact Hgrd
   }
 
 def Decr : OrdinaryEvent (Bounded ctx) Unit Unit :=
