@@ -1,6 +1,7 @@
 
 import LeanMachines.Event.Basic
 import LeanMachines.Event.Ordinary
+import LeanMachines.Event.Convergent
 import LeanMachines.NonDet.Ordinary
 
 structure BoundedCtx where
@@ -32,11 +33,13 @@ def Incr : OrdinaryEvent (Bounded ctx) Unit Unit :=
                    exact Hgrd
   }
 
-def Decr : OrdinaryEvent (Bounded ctx) Unit Unit :=
-  newEvent'' {
+def Decr : ConvergentEvent Nat (Bounded ctx) Unit Unit :=
+  newConvergentEvent'' {
     guard m := m.count > 0
     action m _ := { m with count := m.count - 1 }
     safety m := by simp [Machine.invariant] ; omega
+    variant m := m.count
+    convergence m := by simp; omega
   }
 
 def Discard : OrdinaryNDEvent (Bounded ctx) Unit Nat :=
