@@ -162,7 +162,7 @@ by
   exact Nat.add_le_add_iff_right.mp H₃
 
 def MQ0.Dequeue [DecidableEq α] : OrdinaryRNDEvent (Bounded ctx) (MQ0 α ctx) Unit α Unit Unit :=
-  newRNDEvent Decr.toOrdinaryNDEvent {
+  newRNDEvent Decr.toOrdinaryEvent.toOrdinaryNDEvent {
     lift_in := id
     lift_out _ := ()
     guard mq _ := mq.messages ≠ ∅
