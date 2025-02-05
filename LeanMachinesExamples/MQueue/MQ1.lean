@@ -1,3 +1,5 @@
+import Mathlib.Data.Finset.Max
+
 import LeanMachinesExamples.MQueue.Bounded
 import LeanMachinesExamples.MQueue.Prioritized
 import LeanMachinesExamples.MQueue.Clocked
@@ -211,6 +213,13 @@ by
 def MQ1.maxPrio [DecidableEq α] (mq : MQ1 α ctx) : Prio :=
   Finset.fold max 0 id mq.priorities
 
+theorem MQ1.maxPrio_zero [DecidableEq α] (mq : MQ1 α ctx):
+  mq.priorities = ∅ → mq.maxPrio = 0 :=
+by
+  intro Hp
+  simp [MQ1.maxPrio]
+  simp [Hp]
+
 theorem MQ1.maxPrio_max [DecidableEq α] (mq : MQ1 α ctx) :
   ∀ msg ∈ mq.messages, msg.prio ≤ mq.maxPrio :=
 by
@@ -374,6 +383,81 @@ def MQ1.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (M
       exists msg
       simp [Hmsg, Hy]
       simp [Finset_map_sdiff]
+
+  }
+
+def MQ1.minPrio [DecidableEq α] (mq : MQ1 α ctx) : Prio :=
+  Finset.fold min mq.maxPrio id mq.priorities
+
+
+theorem MQ1.minPrio_zero [DecidableEq α] (mq : MQ1 α ctx):
+  mq.priorities = ∅ → mq.minPrio = 0 :=
+by
+  intro Hps
+  have Hmax : mq.maxPrio = 0 := by
+    apply maxPrio_zero ; assumption
+  simp [MQ1.minPrio]
+  simp [Hmax, Hps]
+
+theorem MQ1.minPrio_le_max [DecidableEq α] (mq : MQ1 α ctx):
+  mq.minPrio ≤ mq.maxPrio :=
+by
+  simp [MQ1.minPrio, MQ1.maxPrio]
+  induction mq.priorities using Finset.induction <;> simp -- not a real induction
+
+theorem MQ1.minPrio_in [DecidableEq α] (mq : MQ1 α ctx):
+  mq.minPrio = mq.maxPrio ∨ mq.minPrio ∈ mq.priorities :=
+by
+  simp [MQ1.minPrio, MQ1.maxPrio]
+  induction mq.priorities using Finset.induction
+  case empty => simp
+  case insert p ps Hp Hind =>
+    simp
+    sorry
+
+
+theorem MQ1.minPrio_min [DecidableEq α] (mq : MQ1 α ctx) :
+  ∀ msg ∈ mq.messages, mq.minPrio ≤ msg.prio :=
+by
+  sorry
+
+def MQ1.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) Unit (Finset (Message α)) Unit (Finset (Message0 α)) :=
+  newRNDEvent MQ0.Discard.toOrdinaryNDEvent {
+    lift_in := id
+    lift_out ms := Finset.map liftMessage ms
+    guard mq _ := mq.messages ≠ ∅
+    effect := fun mq _ _ (y, mq') =>
+                mq'.clock = mq.clock
+                ∧  (∃ ms : Finset (Message α),
+                     ms ⊆ mq.messages ∧ ms ≠ ∅ ∧ mq'.messages = mq.messages \ ms
+                     ∧ ∀ msg₁ ∈ ms, ∀ msg₂ ∈ mq'.messages, msg₁.prio ≤ msg₂.prio)
+
+    safety := fun mq _ => by
+      simp [Machine.invariant]
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd mq' Hclk ms Hms₁ Hms₂ Hmq' Hprio
+      simp [Hmq'] at Hprio
+      simp [Hmq']
+      constructor
+      · rw [Finset.card_sdiff Hms₁]
+        simp [Hinv₁]
+        exact Nat.le_add_right_of_le Hinv₁
+      constructor
+      · simp [Hclk]
+        intros msg Hmsg₁ Hmsg₂
+        exact Hinv₂ msg Hmsg₁
+      constructor
+      · intros msg₁ Hmsg₁ Hmsg₁' msg₂ Hmsg₂ Hmsg₂' Hts
+        exact Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
+      · intros msg Hmsg Hmsg'
+        exact Hinv₄ msg Hmsg
+
+    feasibility := fun mq _ => by
+      simp [Machine.invariant]
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd
+      have Hex : ∃ msg ∈ mq.messages, msg.prio = mq.minPrio := by
+        refine msgEx mq mq.minPrio ?_
+
+
 
   }
 
