@@ -220,4 +220,69 @@ def MQ0.Dequeue [DecidableEq α] : OrdinaryRNDEvent (Bounded ctx) (MQ0 α ctx) U
 
   }
 
+
+def MQ0.Discard [DecidableEq α] : OrdinaryRNDEvent (Bounded ctx) (MQ0 α ctx) Unit (Finset (Message0 α)) Unit Nat :=
+  newRNDEvent Bounded.Discard {
+    lift_in := id
+    lift_out y := y.card
+    guard mq _ := mq.messages ≠ ∅
+    effect := fun mq _ _ (y, mq') =>
+                mq'.clock = mq.clock
+                ∧  (∃ ms : Finset (Message0 α),
+                     ms ⊆ mq.messages ∧ ms ≠ ∅ ∧ mq'.messages = mq.messages \ ms)
+
+    safety := fun mq => by
+      simp [Machine.invariant]
+      intros Hinv₁ Hinv₂ Hinv₃ Hgrd mq' Hclk msgs Hms₁ Hms₂ Heff
+      constructor
+      · rw [Heff]
+        rw [Finset.card_sdiff Hms₁]
+        refine Nat.sub_le_of_le_add ?_
+        exact Nat.le_add_right_of_le Hinv₁
+      constructor
+      · intros msg Hmsg
+        rw [Heff] at Hmsg
+        simp at Hmsg
+        rw [Hclk]
+        apply Hinv₂ ; simp [Hmsg]
+      · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
+        simp [Heff] at Hmsg₁
+        simp [Heff] at Hmsg₂
+        apply Hinv₃
+        · simp [Hmsg₁]
+        · simp [Hmsg₂]
+        · assumption
+
+    feasibility := fun mq _ => by
+      intros Hinv Hgrd
+      have Hex: ∃ msg, msg ∈ mq.messages := by
+        refine Finset.Nonempty.exists_mem ?_
+        exact Finset.nonempty_iff_ne_empty.mpr Hgrd
+      obtain ⟨msg, Hmsg⟩ := Hex
+      exists {msg}
+      exists {clock:=mq.clock, messages:=mq.messages \ {msg}}
+      simp
+      exists {msg}
+      simp [Hmsg]
+
+    strengthening := fun mq _ => by
+      intro Hinv
+      simp [Refinement.refine, Bounded.Discard, FRefinement.lift]
+      intro H
+      exact Finset.nonempty_iff_ne_empty.mpr H
+
+    simulation := fun mq _ => by
+      intros Hinv Hgrd ms mq'
+      simp at Hgrd
+      simp [Refinement.refine, Bounded.Discard, FRefinement.lift]
+      intros Hclk ms Hms₁ Hms₂ Hmq'
+      exists ms.card
+      simp
+      rw [Hmq']
+      constructor
+      · exact Finset.nonempty_iff_ne_empty.mpr Hms₂
+      · exact Finset.card_sdiff Hms₁
+
+  }
+
 end MQueue
