@@ -6,6 +6,8 @@ import LeanMachinesExamples.MQueue.MQ0
 import LeanMachines.Refinement.Functional.Basic
 import LeanMachines.Refinement.Functional.Concrete
 
+import LeanMachines.Refinement.Strong.Basic
+
 namespace MQueue
 
 open Bounded
@@ -71,6 +73,34 @@ instance [instDec: DecidableEq α] : FRefinement (MQ0 α ctx.toBoundedCtx) (MQ1 
     · intros msg Hmsg ; exact Hinv₂ msg Hmsg
     · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
       exact congrArg Message.toMessage0 (Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂ Hts)
+
+def injectPrio [DecidableEq α] (msg0 : Message0 α) : Message α :=
+  { msg0 with prio := default }
+
+def unliftMessage [DecidableEq α]: Message0 α ↪ Message α :=
+  { toFun := injectPrio
+    inj' := by simp [Function.Injective, injectPrio]
+  }
+
+def unliftMessages [DecidableEq α] (msg0s : Finset (Message0 α)) : Finset (Message α) :=
+  msg0s.map unliftMessage
+
+def newMessages [DecidableEq α] (mq0 : MQ0 α ctx) (mq0' : MQ0 α ctx) :=
+  mq0'.messages \ mq0.messages
+
+def MQ1.unlift [DecidableEq α] (mq1 : MQ1 α ctx) (mq0' : MQ0 α ctx.toBoundedCtx) : MQ1 α ctx :=
+ { clock := mq0'.clock
+   messages := mq1.messages ∪ (unliftMessages (newMessages mq1.lift mq0')) }
+
+instance [instDec: DecidableEq α] : SRefinement (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) where
+  unlift := MQ1.unlift
+  lift_unlift := by
+    intros mq1 mq0' Hinv Hainv
+    simp [FRefinement.lift, MQ1.unlift, newMessages]
+    sorry -- TODO
+  lu_default := by
+    simp [FRefinement.lift, MQ1.unlift, default]
+    sorry -- TODO
 
 def MQ1.Init [instDec: DecidableEq α] : InitREvent (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) Unit Unit :=
   newInitREvent'' MQ0.Init.toInitEvent {

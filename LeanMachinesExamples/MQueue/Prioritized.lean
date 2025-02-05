@@ -20,6 +20,9 @@ example: Prio.mk 4 = 4 := by rfl
 instance: Coe Prio Nat where
   coe := fun {prio:=p} => p
 
+-- 0 is the default priority
+instance: Inhabited Prio where default := 0
+
 instance: LawfulBEq Prio where
   eq_of_beq := by intros p₁ p₂ Hbeq
                   cases p₁
