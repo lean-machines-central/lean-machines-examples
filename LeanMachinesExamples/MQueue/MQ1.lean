@@ -44,9 +44,24 @@ def liftMessage [DecidableEq α] : Function.Embedding (Message α) (Message0 α)
     inj' := liftMessage_inj_ax
   }
 
+def liftMessages [DecidableEq α] (ms : Finset (Message α)) : Finset (Message0 α) :=
+  Finset.map liftMessage ms
+
+theorem liftMessages_in [DecidableEq α] (ms : Finset (Message α)):
+  ∀ msg ∈ ms, (liftMessage msg) ∈ liftMessages ms :=
+by
+  simp [liftMessage, liftMessages]
+  intros msg Hmsg
+  exists msg
+
 @[simp]
 def MQ1.lift [DecidableEq α] (mq : MQ1 α ctx) : MQ0 α ctx.toBoundedCtx :=
   {clock := mq.clock, messages := Finset.map liftMessage mq.messages}
+
+theorem MQ1.lift_in [DecidableEq α] (mq : MQ1 α ctx):
+  ∀ msg ∈ mq.messages, (liftMessage msg) ∈ mq.lift.messages :=
+by
+  apply liftMessages_in
 
 instance [instDec: DecidableEq α]: Machine MQContext (MQ1 α (instDec:=instDec) ctx) where
   context := ctx
@@ -87,38 +102,109 @@ def unliftMessage [DecidableEq α]: Message0 α ↪ Message α :=
 def unliftMessages [DecidableEq α] (msg0s : Finset (Message0 α)) : Finset (Message α) :=
   msg0s.map unliftMessage
 
+theorem unliftMessages_sdiff [DecidableEq α] (ms1 ms2 : Finset (Message0 α)):
+  Disjoint ms1 ms2
+  → unliftMessages (ms1 \ ms2) = (unliftMessages ms1) \ (unliftMessages ms2) :=
+by
+  intro Hdisj
+  rw [@Finset.Subset.antisymm_iff]
+  constructor
+  case left =>
+    simp [unliftMessages]
+    sorry
+  case right =>
+    sorry
+
+theorem unliftMessages_in [DecidableEq α] (msg0s : Finset (Message0 α)):
+  ∀ msg0 ∈ msg0s, unliftMessage msg0 ∈ unliftMessages msg0s :=
+by
+  intros msg0 Hmsg0
+  simp [unliftMessage, unliftMessages]
+  exists msg0
+
 def newMessages [DecidableEq α] (mq0 mq0' : MQ0 α ctx) :=
   mq0'.messages \ mq0.messages
 
 def delMessages [DecidableEq α] (mq0 mq0' : MQ0 α ctx) :=
   mq0.messages \ mq0'.messages
 
+def updateMessages [DecidableEq α] (mq1 : MQ1 α ctx) (mq0' : MQ0 α ctx.toBoundedCtx) :=
+  (mq1.messages \ (unliftMessages (delMessages mq1.lift mq0')))
+  ∪ (unliftMessages (newMessages mq1.lift mq0'))
+
+theorem updateMessages_prop₁ [DecidableEq α] (mq1 : MQ1 α ctx) (mq0' : MQ0 α ctx.toBoundedCtx):
+  ∀ msg0 ∈ mq0'.messages,
+    msg0 ∉ mq1.lift.messages
+    → (unliftMessage msg0) ∈ updateMessages mq1 mq0' :=
+by
+  intros msg0 Hmsg0 Hmsg0'
+  simp [updateMessages, newMessages, delMessages]
+  right
+  rw [@Finset.mem_def]
+  refine Finset.mem_def.mp ?_
+  have H₁ : unliftMessage msg0 ∈ unliftMessages mq0'.messages := by
+    exact unliftMessages_in mq0'.messages msg0 Hmsg0
+  have H₂ : unliftMessage msg0 ∉ mq1.messages := by
+    intro Hfalse
+    have Hcontra : msg0 ∈ mq1.lift.messages := by
+      simp
+      simp [unliftMessage] at Hfalse
+      exists (injectPrio msg0)
+    contradiction
+  rw [@Finset.mem_def]
+  simp
+  sorry
+
+
+
+
+
+
 def MQ1.unlift [DecidableEq α] (mq1 : MQ1 α ctx) (mq0' : MQ0 α ctx.toBoundedCtx) : MQ1 α ctx :=
  { clock := mq0'.clock
    messages := (mq1.messages \ (unliftMessages (delMessages mq1.lift mq0'))) ∪ (unliftMessages (newMessages mq1.lift mq0')) }
+
+theorem MQ1.unlift_prop₁ [DecidableEq α] (mq1 : MQ1 α ctx) (mq0' : MQ0 α ctx.toBoundedCtx):
+  unliftMessages mq0'.messages ⊆ (mq1.unlift mq0').messages :=
+by
+  simp [unliftMessages, unliftMessage, MQ1.unlift, newMessages, delMessages]
+  rw [@Finset.subset_iff]
+  intro msg Hmsg
+  simp at *
+  obtain ⟨msg0, ⟨Hmsg0, Hmsg0'⟩⟩ := Hmsg
+  simp [injectPrio] at *
+  simp [←Hmsg0']
+
+
+
+
+
 
 instance [instDec: DecidableEq α] : SRefinement (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) where
   unlift := MQ1.unlift
   lift_unlift := by
     intros mq1 mq0' Hinv Hainv
     simp [FRefinement.lift, MQ1.unlift, newMessages, delMessages, unliftMessages, unliftMessage]
-    cases mq0'
-    case mk clk msgs =>
+    rw [@Finset.map_union]
+    rw [@Finset.map_map]
+    simp
+    have Hmq0'' : mq0' = {clock:=mq0'.clock, messages:=mq0'.messages} := by rfl
+    rw [Hmq0'']
+    simp
+    apply Finset.ext_iff.mpr
+    intro msg
+    constructor
+    case mp =>
       simp
-      refine Finset.ext_iff.mpr ?_
-      intros msg
-      constructor
-      case mp =>
-        intro Hmsg
-        simp at Hmsg
-        obtain ⟨msg₁, ⟨Hmsg₁, Hmsg₁'⟩⟩ := Hmsg
-        cases Hmsg₁
-        case _ Hmsg₁ =>
-          obtain ⟨Hmsg₁, Hmsg₁''⟩ := Hmsg₁
-          sorry
-        case _ => sorry
+      intro Hmsg0
+      cases Hmsg0
+      case inl Hmsg0 =>
+        obtain ⟨msg', ⟨⟨Hmsg'₁, Hmsg'₂⟩, Hmsg'₃⟩⟩ := Hmsg0
 
-      sorry -- TODO
+
+
+
+
   lu_default := by
     simp [FRefinement.lift, MQ1.unlift, default]
     sorry -- TODO
@@ -582,16 +668,38 @@ def MQ1.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (M
     feasibility := fun mq _ => by
       simp [Machine.invariant]
       intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd
+      have Hne : mq.priorities ≠ ∅ := by
+        refine Finset.nonempty_iff_ne_empty.mp ?_
+        refine Nonempty mq ?_
+        exact Finset.nonempty_iff_ne_empty.mpr Hgrd
       have Hex : ∃ msg ∈ mq.messages, msg.prio = mq.minPrio := by
-        sorry
-      sorry
+        refine msgEx mq mq.minPrio ?_
+        exact minPrio_in' mq Hne
+      obtain ⟨msg, Hmsg⟩ := Hex
+      exists {mq with messages := mq.messages \ {msg}}
+      simp
+      obtain ⟨Hmsg₁, Hmsg₁'⟩ := Hmsg
+      exists {msg}
+      simp [Hmsg₁]
+      intros msg₂ Hmsg₂
+      intros Hneq
+      rw [Hmsg₁']
+      exact minPrio_min mq msg₂ Hmsg₂
 
     strengthening := fun mq _ => by
       simp [Machine.invariant, Refinement.refine, MQ0.Discard, FRefinement.lift]
 
     simulation := fun mq _ => by
-      sorry
-
+      simp [Machine.invariant, Refinement.refine, MQ0.Discard, FRefinement.lift]
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd mq' Hmq' ms Hms₁ Hms₂ Hmq'' Hprio
+      constructor
+      case left => exact Hmq'
+      case right =>
+        exists (Finset.map liftMessage ms)
+        simp [Hms₁, Hms₂, Hmq'']
+        exact
+          Finset_map_sdiff mq.messages ms
+            { toFun := Message.toMessage0, inj' := liftMessage_inj_ax }
   }
 
 end MQueue
