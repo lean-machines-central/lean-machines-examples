@@ -87,19 +87,38 @@ def unliftMessage [DecidableEq α]: Message0 α ↪ Message α :=
 def unliftMessages [DecidableEq α] (msg0s : Finset (Message0 α)) : Finset (Message α) :=
   msg0s.map unliftMessage
 
-def newMessages [DecidableEq α] (mq0 : MQ0 α ctx) (mq0' : MQ0 α ctx) :=
+def newMessages [DecidableEq α] (mq0 mq0' : MQ0 α ctx) :=
   mq0'.messages \ mq0.messages
+
+def delMessages [DecidableEq α] (mq0 mq0' : MQ0 α ctx) :=
+  mq0.messages \ mq0'.messages
 
 def MQ1.unlift [DecidableEq α] (mq1 : MQ1 α ctx) (mq0' : MQ0 α ctx.toBoundedCtx) : MQ1 α ctx :=
  { clock := mq0'.clock
-   messages := mq1.messages ∪ (unliftMessages (newMessages mq1.lift mq0')) }
+   messages := (mq1.messages \ (unliftMessages (delMessages mq1.lift mq0'))) ∪ (unliftMessages (newMessages mq1.lift mq0')) }
 
 instance [instDec: DecidableEq α] : SRefinement (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) where
   unlift := MQ1.unlift
   lift_unlift := by
     intros mq1 mq0' Hinv Hainv
-    simp [FRefinement.lift, MQ1.unlift, newMessages]
-    sorry -- TODO
+    simp [FRefinement.lift, MQ1.unlift, newMessages, delMessages, unliftMessages, unliftMessage]
+    cases mq0'
+    case mk clk msgs =>
+      simp
+      refine Finset.ext_iff.mpr ?_
+      intros msg
+      constructor
+      case mp =>
+        intro Hmsg
+        simp at Hmsg
+        obtain ⟨msg₁, ⟨Hmsg₁, Hmsg₁'⟩⟩ := Hmsg
+        cases Hmsg₁
+        case _ Hmsg₁ =>
+          obtain ⟨Hmsg₁, Hmsg₁''⟩ := Hmsg₁
+          sorry
+        case _ => sorry
+
+      sorry -- TODO
   lu_default := by
     simp [FRefinement.lift, MQ1.unlift, default]
     sorry -- TODO
@@ -389,7 +408,6 @@ def MQ1.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (M
 def MQ1.minPrio [DecidableEq α] (mq : MQ1 α ctx) : Prio :=
   Finset.fold min mq.maxPrio id mq.priorities
 
-
 theorem MQ1.minPrio_zero [DecidableEq α] (mq : MQ1 α ctx):
   mq.priorities = ∅ → mq.minPrio = 0 :=
 by
@@ -399,27 +417,137 @@ by
   simp [MQ1.minPrio]
   simp [Hmax, Hps]
 
-theorem MQ1.minPrio_le_max [DecidableEq α] (mq : MQ1 α ctx):
-  mq.minPrio ≤ mq.maxPrio :=
+theorem minPrio_le_max_aux (ps : Finset Prio) (df : Prio):
+  ps.fold min df id ≤ df :=
 by
-  simp [MQ1.minPrio, MQ1.maxPrio]
-  induction mq.priorities using Finset.induction <;> simp -- not a real induction
-
-theorem MQ1.minPrio_in [DecidableEq α] (mq : MQ1 α ctx):
-  mq.minPrio = mq.maxPrio ∨ mq.minPrio ∈ mq.priorities :=
-by
-  simp [MQ1.minPrio, MQ1.maxPrio]
-  induction mq.priorities using Finset.induction
+  induction ps using Finset.induction
   case empty => simp
   case insert p ps Hp Hind =>
     simp
-    sorry
+    by_cases p ≤ df
+    case pos Hpos =>
+      simp [Hpos]
+    case neg Hneg =>
+      right
+      exact Hind
 
+theorem MQ1.minPrio_le_max [DecidableEq α] (mq : MQ1 α ctx):
+  mq.minPrio ≤ mq.maxPrio :=
+by
+  apply minPrio_le_max_aux
+
+theorem minPrio_le_aux (ps : Finset Prio) (df : Prio):
+  ∀ p ∈ ps, ps.fold min df id ≤ p :=
+by
+  induction ps using Finset.induction
+  case empty => simp
+  case insert q ps Hq Hind =>
+    simp
+    intros p Hp
+    by_cases q ≤ p
+    case pos Hpos =>
+      simp [Hpos]
+    case neg Hneg =>
+      right
+      exact Hind p Hp
+
+theorem MQ1.minPrio_le [DecidableEq α] (mq : MQ1 α ctx):
+  ∀ p ∈ mq.priorities, mq.minPrio ≤ p :=
+by
+  apply minPrio_le_aux
+
+theorem minPrio_in_aux (ps : Finset Prio) (df : Prio):
+  ps.fold min df id ∈ ps ∪ {df} :=
+by
+  induction ps using Finset.induction
+  case empty => simp
+  case insert q ps Hq Hind =>
+    simp
+    simp at Hind
+    cases Hind
+    case inl Hind =>
+      by_cases q ≤ Finset.fold min df (fun x => x) ps
+      case pos Hq =>
+        left
+        exact Hq
+      case neg Hq =>
+        right
+        have Hmin : q ⊓ Finset.fold min df (fun x => x) ps = Finset.fold min df (fun x => x) ps := by
+          simp [Hq]
+          exact le_of_not_ge Hq
+        simp [Hmin]
+        left
+        exact Hind
+    case inr Hind =>
+      simp [Hind]
+      by_cases q ≤ df
+      case pos Hpos =>
+        simp [Hpos]
+      case neg Hneg =>
+        by_cases df ≤ q
+        case pos Hpos =>
+          simp [Hpos]
+        case neg Hneg' =>
+          have Htot := le_total q df
+          cases Htot
+          case inl Htot =>
+            simp [Htot]
+          case inr Htot =>
+            simp [Htot]
+
+theorem MQ1.minPrio_in [DecidableEq α] (mq : MQ1 α ctx):
+  mq.minPrio ∈ mq.priorities ∪ {mq.maxPrio} :=
+by
+  apply minPrio_in_aux
+
+theorem minPrio_in_aux' (ps : Finset Prio) (df : Prio):
+  ps ≠ ∅ → ∀ p ∈ ps, p ≤ df → ps.fold min df id ∈ ps :=
+by
+  have Haux := minPrio_in_aux ps df
+  intros Hne p Hp₁ Hp₂
+  simp at Haux
+  cases Haux
+  case inl Haux =>
+    simp [Haux]
+  case inr Haux =>
+    simp [Haux]
+    have Hdf := minPrio_le_aux ps df p Hp₁
+    simp [Haux] at Hdf
+    have Heq: p = df := by
+      apply le_antisymm <;> assumption
+    simp [←Heq, Hp₁]
+
+theorem MQ1.minPrio_in' [DecidableEq α] (mq : MQ1 α ctx):
+  mq.priorities ≠ ∅
+  → mq.minPrio ∈ mq.priorities :=
+by
+  intro Hne
+  have Hcut : mq.minPrio ∈ mq.priorities ∪ {mq.maxPrio} := by exact minPrio_in mq
+  simp at Hcut
+  cases Hcut
+  case inl Hin => exact Hin
+  case inr Heq =>
+    rw [Heq]
+    refine maxPrio_in mq ?_
+    exact Finset.nonempty_iff_ne_empty.mpr Hne
+
+theorem MQ1.minPrio_empty [DecidableEq α] (mq : MQ1 α ctx):
+  mq.priorities = ∅
+  → mq.minPrio = mq.maxPrio :=
+by
+  intro Hne
+  have Hcut : mq.minPrio ∈ mq.priorities ∪ {mq.maxPrio} := by exact minPrio_in mq
+  simp at Hcut
+  cases Hcut
+  case inl Hin => simp [Hne] at Hin
+  case inr Heq => exact Heq
 
 theorem MQ1.minPrio_min [DecidableEq α] (mq : MQ1 α ctx) :
   ∀ msg ∈ mq.messages, mq.minPrio ≤ msg.prio :=
 by
-  sorry
+  intros msg Hmsg
+  have Hin: msg.prio ∈ mq.priorities := by exact MQ1_prios_in mq msg Hmsg
+  exact minPrio_le mq msg.prio Hin
 
 def MQ1.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) Unit (Finset (Message α)) Unit (Finset (Message0 α)) :=
   newRNDEvent MQ0.Discard.toOrdinaryNDEvent {
@@ -455,9 +583,14 @@ def MQ1.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (M
       simp [Machine.invariant]
       intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd
       have Hex : ∃ msg ∈ mq.messages, msg.prio = mq.minPrio := by
-        refine msgEx mq mq.minPrio ?_
+        sorry
+      sorry
 
+    strengthening := fun mq _ => by
+      simp [Machine.invariant, Refinement.refine, MQ0.Discard, FRefinement.lift]
 
+    simulation := fun mq _ => by
+      sorry
 
   }
 
