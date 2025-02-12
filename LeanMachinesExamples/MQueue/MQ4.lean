@@ -242,4 +242,10 @@ def MQ4.Dequeue [DecidableEq α] [Inhabited α]: OrdinaryREvent (MQ3 α ctx) (MQ
     strengthening mq _ grd := sorry
   }
 
+def MQ4.Discard [DecidableEq α] : OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) Clock (List (Message α)) :=
+  newAbstractSREvent MQ3.Discard.toOrdinaryEvent {
+    step_inv mq clk := by sorry
+
+  }
+
 end MQueue
