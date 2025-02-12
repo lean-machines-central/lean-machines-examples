@@ -1,6 +1,8 @@
 
 import LeanMachinesExamples.MQueue.MQ3
 
+import LeanMachines.Refinement.Strong.Abstract
+
 namespace MQueue
 
 open Clocked
@@ -12,12 +14,12 @@ structure MQ4 (α : Type 0) [instDec: DecidableEq α] (ctx : MQContext)
 
 def MQ4.lift [DecidableEq α] (mq : MQ4 α ctx) : MQ3 α ctx := {
   clock := mq.clock,
-  queue := mq.queue.toList
+  queue := mq.queue.toList.reverse
 }
 
 def MQ4.unlift [DecidableEq α] (_ : MQ4 α ctx) (amq' : MQ3 α ctx) : MQ4 α ctx := {
   clock := amq'.clock,
-  queue := amq'.queue.toArray
+  queue := amq'.queue.reverse.toArray
 }
 
 def MQ4.sigs [DecidableEq α] (mq : MQ4 α ctx) : List MessageSig :=
@@ -30,7 +32,7 @@ instance [instDec: DecidableEq α]: Machine MQContext (MQ4 α (instDec:=instDec)
                   ∧ (∀ msg₁ ∈ mq.queue, ∀ msg₂ ∈ mq.queue, msg₁.timestamp = msg₂.timestamp → msg₁ = msg₂)
                   ∧ (∀ msg ∈ mq.queue, ctx.minPrio ≤ msg.prio ∧ msg.prio ≤ ctx.maxPrio)
                   ∧ mq.queue.toList.Nodup
-                  ∧ mq.sigs.Sorted (·≥·)
+                  ∧ mq.sigs.Sorted (·≤·)
   default := { queue := #[], clock := 0}
 
 instance [DecidableEq α]: SRefinement (MQ3 α ctx) (MQ4 α ctx) where
@@ -50,7 +52,7 @@ instance [DecidableEq α]: SRefinement (MQ3 α ctx) (MQ4 α ctx) where
     · apply Hinv₄
     constructor
     · exact Hinv₅
-    · exact Hinv₆
+    · sorry
 
   unlift := MQ4.unlift
   lu_default mq := by
@@ -225,3 +227,19 @@ def MQ4.Enqueue [DecidableEq α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) (α �
       intros Hinv Hgrd₁ Hgrd₂ Hgrd₃
       sorry
   }
+
+
+def MQ4.Dequeue [DecidableEq α] [Inhabited α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) Unit (α × Prio) :=
+  newSREvent MQ3.Dequeue.toOrdinaryEvent {
+    lift_in := id
+    lift_out := id
+    guard mq _ := mq.queue.size > 0
+    action mq _ grd := let msg := mq.queue[mq.queue.size-1]
+                       ((msg.payload, msg.prio), { mq with queue := mq.queue.pop })
+
+    safety mq _ grd := sorry
+    simulation mq _ grd := sorry
+    strengthening mq _ grd := sorry
+  }
+
+end MQueue

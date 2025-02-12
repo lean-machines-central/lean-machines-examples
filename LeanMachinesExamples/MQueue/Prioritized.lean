@@ -138,6 +138,41 @@ instance: LinearOrder Prio where
       simp [compareOfLessAndEq]
       rfl
 
+instance: Add Prio where
+  add p₁ p₂ := {prio := p₁.prio + p₂.prio}
+
+example: (1 : Prio) + (2 : Prio) = 3 := by rfl
+
+theorem Prio_add_simp (p q : Nat):
+  ((Prio.mk p) + (Prio.mk q)).prio = p + q := rfl
+
+theorem Prio_Add_cancel_left (p₁ p₂ q : Prio):
+  p₁ + q = p₂ + q
+  → p₁ = p₂ :=
+by
+  cases p₁
+  case mk p₁ =>
+  cases p₂
+  case mk p₂ =>
+    simp [HAdd.hAdd]
+    unfold Add.add
+    simp [instAddPrio]
+
+theorem Prio_Add_le_left (p₁ p₂ q : Prio):
+  p₁ ≤ p₂
+  → p₁ ≤ p₂ + q :=
+by
+  intro Hle
+  cases p₁
+  case mk p₁ =>
+  cases p₂
+  case mk p₂ =>
+  cases q
+  case mk q =>
+     refine Prio_lift_le { prio := p₁ } ({ prio := p₂ } + { prio := q }) ?_
+     simp [Prio_add_simp]
+     exact Nat.le_add_right_of_le Hle
+
 structure PrioCtx where
   minPrio : Prio
   maxPrio : Prio

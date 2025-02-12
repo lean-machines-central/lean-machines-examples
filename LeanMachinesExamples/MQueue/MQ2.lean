@@ -537,4 +537,33 @@ def MQ2.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
 
   }
 
+
+def MQ2.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Unit (Finset (Message α)) :=
+  newFRNDEvent MQ1.Discard.toOrdinaryNDEvent {
+    lift_in := id
+    lift_out := id
+
+    guard mq _ := mq.messages ≠ ∅
+    effect := fun mq _ _ (y, mq') =>
+                mq'.clock = mq.clock
+                ∧  (∃ ms : Finset (Message α),
+                     ms ⊆ mq.messages ∧ ms ≠ ∅ ∧ mq'.messages = mq.messages \ ms
+                     ∧ ∀ msg₁ ∈ ms, ∀ msg₂ ∈ mq'.messages, msg₁.prio ≤ msg₂.prio)
+
+    safety := fun mq _ => by
+      simp [Machine.invariant]
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hgrd mq' Hclk ms Hms₁ Hms₂ Hmq' Hprio
+      sorry
+
+    feasibility := fun mq _ => by
+      sorry
+
+    strengthening := fun mq _ => by
+      sorry
+
+    simulation := fun mq _ => by
+      sorry
+  }
+
+
 end MQueue

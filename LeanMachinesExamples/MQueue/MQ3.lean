@@ -1,6 +1,7 @@
 import LeanMachinesExamples.MQueue.MQ2
 
 import LeanMachines.Refinement.Strong.Basic
+import LeanMachines.Refinement.Functional.NonDet.Det.Basic
 
 namespace MQueue
 
@@ -1036,5 +1037,20 @@ def MQ3.Dequeue [DecidableEq α] [Inhabited α]: OrdinaryRDetEvent (MQ2 α ctx) 
         exact List.Perm.erase (mq.queue.head Hgrd) Href₁
       · simp [Href₂]
   }
+
+def MQ3.Discard [DecidableEq α] : OrdinaryRDetEvent (MQ2 α ctx) (MQ3 α ctx) Clock (List (Message α)) Unit (Finset (Message α)) :=
+  newRDetEvent MQ2.Discard.toOrdinaryNDEvent {
+    lift_in clk := ()
+    lift_out msgs := msgs.toFinset
+    guard mq clk := mq.queue.length > 0 ∧ ∃ msg ∈ mq.queue, msg.timestamp > clk
+    action mq clk grd :=
+      let mq' := { mq with queue := mq.queue.filter (fun msg => msg.timestamp ≤ clk), clock := mq.clock}
+      (mq.queue.filter (fun msg => msg.timestamp > clk), mq')
+
+    safety mq clk grd := by sorry
+    strengthening mq clk grd := by sorry
+    simulation mq clk grd := by sorry
+  }
+
 
 end MQueue

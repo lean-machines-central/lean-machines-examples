@@ -174,10 +174,7 @@ by
   obtain ⟨msg0, ⟨Hmsg0, Hmsg0'⟩⟩ := Hmsg
   simp [injectPrio] at *
   simp [←Hmsg0']
-
-
-
-
+  sorry
 
 
 instance [instDec: DecidableEq α] : SRefinement (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) where
@@ -200,6 +197,10 @@ instance [instDec: DecidableEq α] : SRefinement (MQ0 α ctx.toBoundedCtx) (MQ1 
       cases Hmsg0
       case inl Hmsg0 =>
         obtain ⟨msg', ⟨⟨Hmsg'₁, Hmsg'₂⟩, Hmsg'₃⟩⟩ := Hmsg0
+        sorry
+
+      sorry
+    sorry
 
 
 
@@ -701,5 +702,79 @@ def MQ1.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (M
           Finset_map_sdiff mq.messages ms
             { toFun := Message.toMessage0, inj' := liftMessage_inj_ax }
   }
+
+def shiftPrio  [DecidableEq α] (n : Nat) (msg : Message α) : Message α :=
+  { msg with prio := msg.prio + (Prio.mk n) }
+
+def shiftPrio' [DecidableEq α] (n : Nat) : Message α ↪ Message α := {
+  toFun := shiftPrio n
+  inj' := fun m₁ m₂ Heq => by
+    simp [shiftPrio] at Heq
+    obtain ⟨Heq₁, Heq₂⟩ := Heq
+    cases m₁
+    case _ x₁ p₁ =>
+    cases m₂
+    case _ x₂ p₂ =>
+      simp at *
+      cases p₁
+      case mk p₁ =>
+      cases p₂
+      case mk p₂ =>
+        simp
+        have Heq₂' : Prio.mk p₁ = Prio.mk p₂ := by
+          exact Prio_Add_cancel_left { prio := p₁ } { prio := p₂ } { prio := n } Heq₂
+        simp at Heq₂'
+        simp [Heq₁, Heq₂']
+}
+
+def MQ1.ShiftPrio [DecidableEq α] : OrdinaryRDetEvent (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) Nat Unit :=
+  newConcreteFREvent {
+    guard mq n := (MQ1.maxPrio mq) + n ≤ ctx.maxPrio
+    action mq n grd :=
+      let mq' := { mq with messages := Finset.map (shiftPrio' n) mq.messages }
+      ((), mq')
+
+    safety mq n := by
+      simp [Machine.invariant, shiftPrio', shiftPrio]
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd
+      constructor
+      · exact Hinv₁
+      constructor
+      · intros msg Hmsg ; exact Hinv₂ msg Hmsg
+      constructor
+      · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
+        have Heq₁ : msg₁.toMessage0 = msg₂.toMessage0 := by
+          exact congrArg Message.toMessage0 (Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂ Hts)
+        simp [Heq₁]
+        have Heq₂ : msg₁.prio = msg₂.prio := by
+          exact congrArg Message.prio (Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂ Hts)
+        exact congrFun (congrArg HAdd.hAdd Heq₂) { prio := n }
+      · intros msg Hmsg
+        constructor
+        · have H₁ : ctx.minPrio ≤ msg.prio := by
+            apply (Hinv₄ msg Hmsg).1
+          exact Prio_Add_le_left ctx.minPrio msg.prio { prio := n } H₁
+        · have H₂ : msg.prio ≤ ctx.maxPrio := by
+            apply (Hinv₄ msg Hmsg).2
+          have Hp: msg.prio ≤ mq.maxPrio := by
+            exact maxPrio_max mq msg Hmsg
+          have H₃ : msg.prio + n ≤ mq.maxPrio + n := by
+            exact Nat.add_le_add_right Hp n
+          exact
+            Preorder.le_trans (msg.prio + { prio := n })
+              {
+                prio :=
+                  (match mq.maxPrio with
+                    | { prio := p } => p) +
+                    n }
+              ctx.maxPrio H₃ Hgrd
+
+    simulation mq n := by
+      simp [Machine.invariant, FRefinement.lift, shiftPrio', shiftPrio]
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd
+      sorry
+
+  }
+
 
 end MQueue
