@@ -453,6 +453,17 @@ by
       simp [Finset.sdiff_singleton_eq_erase]
       assumption
 
+
+theorem List_sub_Nodup [DecidableEq α] (xs ys : List α):
+  ys.Nodup
+  → xs.Sublist ys
+  → xs.Nodup :=
+by
+  intros Hns Hsub
+  exact List.Sublist.nodup Hsub Hns
+
+
+
 def MQ2.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Unit (α × Prio) :=
   newFRNDEvent MQ1.Dequeue.toOrdinaryNDEvent {
     lift_in := id
@@ -552,21 +563,26 @@ def MQ2.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
     effect := fun mq _ _ (y, mq') =>
                 mq'.clock = mq.clock
                 ∧  (∃ ms : Finset (Message α),
-                     ms ⊆ mq.messages ∧ ms ≠ ∅ ∧ mq'.messages = mq.messages \ ms
+                     ms ⊆ mq.messages ∧ ms ≠ ∅
+                     ∧ mq'.messages = mq.messages \ ms
+                     ∧ mq'.queue.Sublist mq.queue
                      ∧ ∀ msg₁ ∈ ms, ∀ msg₂ ∈ mq'.messages, msg₁.prio ≤ msg₂.prio)
 
     safety := fun mq _ => by
       simp [Machine.invariant]
-      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hgrd mq' Hclk ms Hms₁ Hms₂ Hmq' Hprio
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hgrd mq' Hclk ms Hms₁ Hms₂ Hmq' Hsub Hprio
+
       have Hin: ∀ msg ∈ mq'.queue, msg ∈ mq.queue := by
         intros msg Hmsg
         have Hin': msg ∈ mq'.messages := by
           exact in_queue_in_messages mq' msg Hmsg
-        simp [Hmq'] at Hin'
-        simp [Hin']
+        exact List.Sublist.mem Hmsg Hsub
+
+      have Hsub': mq'.queue ⊆ mq.queue := by
+        exact Hin
 
       have Hnd: mq'.queue.Nodup := by
-        sorry -- prove a more general lemma
+        exact List_sub_Nodup mq'.queue mq.queue Hinv₅ Hsub
 
       have Hlen: mq.queue.toFinset.card = mq.queue.length := by
         exact List.toFinset_card_of_nodup Hinv₅
@@ -575,17 +591,17 @@ def MQ2.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
         exact List.toFinset_card_of_nodup Hnd
 
       have Hcard: mq'.queue.toFinset.card ≤ mq.queue.toFinset.card := by
-        rw [Hmq']
+        simp [Hmq']
         exact Finset_card_sdiff_le mq.queue.toFinset ms
 
       constructor
       · rw [←Hlen']
-        rw [Hmq']
+
         have Hinv₁' : mq.queue.toFinset.card ≤ ctx.maxCount := by
           rw [←Hlen] at Hinv₁
           exact Hinv₁
-        rw [Finset.card_sdiff Hms₁]
-        omega
+        exact Nat.le_trans Hcard Hinv₁'
+
       constructor
       · intros msg Hmsg
         rw [Hclk]
