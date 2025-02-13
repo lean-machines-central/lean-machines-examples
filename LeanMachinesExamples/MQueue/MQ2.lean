@@ -144,6 +144,12 @@ instance [instDec: DecidableEq α] : FRefinement (MQ1 α ctx) (MQ2 α ctx) where
     · intros msg Hmsg
       exact Hinv₄ msg Hmsg
 
+theorem List_nodup_length_card [DecidableEq α] (xs : List α):
+  xs.Nodup → xs.length = xs.toFinset.card :=
+by
+  intro Hnd
+  exact Eq.symm (List.toFinset_card_of_nodup Hnd)
+
 def MQ2.Init [instDec: DecidableEq α] : InitREvent (MQ1 α ctx) (MQ2 α ctx) Unit Unit :=
   newInitREvent'' MQ1.Init.toInitEvent {
     init _ := { queue := [], clock := 0}
@@ -537,7 +543,6 @@ def MQ2.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
 
   }
 
-
 def MQ2.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Unit (Finset (Message α)) :=
   newFRNDEvent MQ1.Discard.toOrdinaryNDEvent {
     lift_in := id
@@ -553,7 +558,45 @@ def MQ2.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
     safety := fun mq _ => by
       simp [Machine.invariant]
       intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hgrd mq' Hclk ms Hms₁ Hms₂ Hmq' Hprio
-      sorry
+      have Hin: ∀ msg ∈ mq'.queue, msg ∈ mq.queue := by
+        intros msg Hmsg
+        have Hin': msg ∈ mq'.messages := by
+          exact in_queue_in_messages mq' msg Hmsg
+        simp [Hmq'] at Hin'
+        simp [Hin']
+
+      have Hnd: mq'.queue.Nodup := by
+        sorry -- prove a more general lemma
+
+      have Hlen: mq.queue.toFinset.card = mq.queue.length := by
+        exact List.toFinset_card_of_nodup Hinv₅
+
+      have Hlen': mq'.queue.toFinset.card = mq'.queue.length := by
+        exact List.toFinset_card_of_nodup Hnd
+
+      have Hcard: mq'.queue.toFinset.card ≤ mq.queue.toFinset.card := by
+        rw [Hmq']
+        exact Finset_card_sdiff_le mq.queue.toFinset ms
+
+      constructor
+      · rw [←Hlen']
+        rw [Hmq']
+        have Hinv₁' : mq.queue.toFinset.card ≤ ctx.maxCount := by
+          rw [←Hlen] at Hinv₁
+          exact Hinv₁
+        rw [Finset.card_sdiff Hms₁]
+        omega
+      constructor
+      · intros msg Hmsg
+        rw [Hclk]
+        exact Hinv₂ msg (Hin msg Hmsg)
+      constructor
+      · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
+        exact Hinv₃ msg₁ (Hin msg₁ Hmsg₁) msg₂ (Hin msg₂ Hmsg₂) Hts
+      constructor
+      · intros msg Hmsg
+        exact Hinv₄ msg (Hin msg Hmsg)
+      · exact Hnd
 
     feasibility := fun mq _ => by
       sorry
