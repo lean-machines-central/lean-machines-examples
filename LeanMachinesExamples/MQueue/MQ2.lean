@@ -554,6 +554,52 @@ def MQ2.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
 
   }
 
+def MQ2.minPrio [DecidableEq α] (mq : MQ2 α ctx) : Prio :=
+  mq.lift.minPrio
+
+theorem MQ2.minPrio_min [DecidableEq α] (mq : MQ2 α ctx) :
+  ∀ msg ∈ mq.queue, mq.minPrio ≤ msg.prio :=
+by
+  intros msg Hmsg
+  have Hmsg' : msg ∈ mq.messages := by exact in_queue_in_messages mq msg Hmsg
+  rw [←lift_Messages] at Hmsg'
+  apply MQ1.minPrio_min ; assumption
+
+theorem MQ2.minPrio_in [DecidableEq α] (mq : MQ2 α ctx):
+  Finset.Nonempty mq.priorities
+  → mq.minPrio ∈ mq.priorities ∪ {mq.maxPrio} :=
+by
+  rw [← @lift_Prios]
+  unfold MQ2.maxPrio
+  intro Hne
+  apply MQ1.minPrio_in
+
+def MQ2.minElemEx [DecidableEq α] (mq : MQ2 α ctx):
+  mq.queue ≠ []
+  → ∃ msg ∈ mq.queue, msg.prio = mq.minPrio :=
+by
+  intro Hne
+  have Hne' : Finset.Nonempty mq.messages := by
+    simp
+    exact Hne
+  have Hne'': mq.priorities.Nonempty := by
+    rw [← @lift_Prios]
+    exact MQ1.Nonempty mq.lift Hne'
+  have Hct := MQ2.minPrio_in mq Hne''
+  simp at Hct
+  cases Hct
+  case inl Hct =>
+    have Hex := MQ2.msgEx mq mq.minPrio Hct
+    obtain ⟨msg, Hmsg₁, Hmsg₂⟩ := Hex
+    exists msg
+    constructor
+    · exact in_messages_in_queue mq msg Hmsg₁
+    · exact Hmsg₂
+
+  case inr Hct =>
+    rw [Hct]
+    exact maxElemEx mq Hne
+
 def MQ2.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Unit (Finset (Message α)) :=
   newFRNDEvent MQ1.Discard.toOrdinaryNDEvent {
     lift_in := id
@@ -615,7 +661,26 @@ def MQ2.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
       · exact Hnd
 
     feasibility := fun mq _ => by
-      sorry
+      simp [Machine.invariant]
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hgrd
+      have Hne : mq.messages ≠ ∅ := by
+        simp [Hgrd]
+      have Hex: ∃ msg ∈ mq.queue, msg.prio = MQ2.minPrio mq := by
+        apply MQ2.minElemEx
+        exact Hgrd
+      obtain ⟨msg, Hmsg⟩ := Hex
+      exists {clock:=mq.clock, queue := mq.queue.erase msg}
+      simp
+      exists {msg}
+      simp [Hmsg]
+      constructor
+      · exact List_erase_Finset_Nodup mq.queue msg Hinv₅
+      constructor
+      · exact List.erase_sublist msg mq.queue
+      · intros msg₂ Hmsg₂
+        have Hmsg₂' : msg₂ ∈ mq.queue := by
+          exact List.mem_of_mem_erase Hmsg₂
+        exact minPrio_min mq msg₂ Hmsg₂'
 
     strengthening := fun mq _ => by
       sorry
