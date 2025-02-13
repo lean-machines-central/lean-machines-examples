@@ -683,10 +683,18 @@ def MQ2.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
         exact minPrio_min mq msg₂ Hmsg₂'
 
     strengthening := fun mq _ => by
-      sorry
+      simp [Machine.invariant]
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hgrd
+      simp [MQ1.Discard, FRefinement.lift]
+      assumption
 
     simulation := fun mq _ => by
-      sorry
+      simp [Machine.invariant, MQ1.Discard, FRefinement.lift]
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hgrd mq' Hclk ms Hms₁ Hms₂ Hmq' Hsub Hprio
+      constructor
+      · assumption
+      · exists ms
+
   }
 
 
