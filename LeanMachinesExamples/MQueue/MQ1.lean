@@ -184,9 +184,19 @@ by
   simp [liftMessage_roundTrip] at Hmsg₁' Hmsg₂'
   simp [newMessages] at Hmsg₁'
   simp [delMessages] at Hmsg₂'
+  intro Hcontra
+  simp [Hcontra] at Hmsg₁' Hmsg₂'
+  obtain ⟨Hmsg₁', Hmsg₁''⟩ := Hmsg₁'
+  obtain ⟨Hmsg₂', Hmsg₂''⟩ := Hmsg₂'
+  contradiction
 
-
-
+theorem unlift_del_messages [DecidableEq α] (mq0 mq0' : MQ0 α ctx):
+  unliftMessages (delMessages mq0 mq0')
+  = unliftMessages mq0.messages \ unliftMessages mq0'.messages :=
+by
+  unfold delMessages
+  rw [unliftMessages_sdiff]
+  sorry
 
 def updateMessages [DecidableEq α] (mq1 : MQ1 α ctx) (mq0' : MQ0 α ctx.toBoundedCtx) :=
   (mq1.messages \ (unliftMessages (delMessages mq1.lift mq0')))
@@ -212,9 +222,15 @@ by
 instance [instDec: DecidableEq α] : SRefinement (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) where
   unlift := MQ1.unlift
   lift_unlift := by
-    intros mq1 mq0' Hinv Hainv
-    simp [FRefinement.lift, MQ1.unlift]
-    sorry
+    intros mq1 mq0'
+    cases mq0'
+    case mk mq0'_clk qm0'_msgs =>
+      simp [FRefinement.lift]
+      unfold MQ1.unlift
+      simp
+      intro Hinv Hainv'
+      simp [delMessages]
+      sorry
 
   lu_default := by
     simp [FRefinement.lift, MQ1.unlift, default]
