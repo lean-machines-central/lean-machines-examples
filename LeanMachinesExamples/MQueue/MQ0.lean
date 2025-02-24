@@ -28,6 +28,7 @@ instance [instDec: DecidableEq α] (m₁ m₂ : @Message0 α instDec): Decidable
        simp
        exact instDecidableAnd
 
+@[ext]
 structure MQ0 (α : Type 0) [instDec: DecidableEq α] (ctx : BoundedCtx)
     extends Clocked where
   messages : Finset (Message0 (instDec:=instDec))

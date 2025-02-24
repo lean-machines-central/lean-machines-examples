@@ -29,6 +29,7 @@ instance [instDec: DecidableEq α] (m₁ m₂ : @Message α instDec): Decidable 
 --instance [DecidableEq α]: LT (Message α) where
 --  lt m₁ m₂ := (m₁.prio < m₂.prio) ∨ (m₁.prio = m₂.prio ∧ m₁.timestamp < m₂.timestamp)
 
+@[ext]
 structure MQ1 (α : Type 0) [instDec: DecidableEq α] (ctx : MQContext)
     extends Clocked where
   messages : Finset (Message α)
@@ -37,7 +38,6 @@ structure MQ1 (α : Type 0) [instDec: DecidableEq α] (ctx : MQContext)
 axiom liftMessage_inj_ax {α} [instDec: DecidableEq α]:
   Function.Injective (Message.toMessage0 (instDec:=instDec))
 
-@[simp]
 def liftMessage [DecidableEq α] : Function.Embedding (Message α) (Message0 α) :=
   {
     toFun := Message.toMessage0
@@ -56,7 +56,7 @@ by
 
 @[simp]
 def MQ1.lift [DecidableEq α] (mq : MQ1 α ctx) : MQ0 α ctx.toBoundedCtx :=
-  {clock := mq.clock, messages := Finset.map liftMessage mq.messages}
+  {clock := mq.clock, messages := liftMessages mq.messages}
 
 theorem MQ1.lift_in [DecidableEq α] (mq : MQ1 α ctx):
   ∀ msg ∈ mq.messages, (liftMessage msg) ∈ mq.lift.messages :=
@@ -82,14 +82,15 @@ by
 instance [instDec: DecidableEq α] : FRefinement (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) where
   lift := MQ1.lift
   lift_safe mq := by
-    simp [Machine.invariant]
+    simp [Machine.invariant, liftMessages]
     intros Hinv₁ Hinv₂ Hinv₃ Hinv₄
     constructor
     · exact Hinv₁
     constructor
     · intros msg Hmsg ; exact Hinv₂ msg Hmsg
     · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
-      exact congrArg Message.toMessage0 (Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂ Hts)
+      simp [liftMessage] at Hts
+      exact Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
 
 def injectPrio [DecidableEq α] (msg0 : Message0 α) : Message α :=
   { msg0 with prio := default }
@@ -151,11 +152,36 @@ by
   intro msg
   constructor
   case mp =>
-    simp [unliftMessage, injectPrio]
+    simp [liftMessage, unliftMessage, injectPrio]
   case mpr =>
     intro Hmsg
-    simp [unliftMessage, injectPrio]
+    simp [liftMessage, unliftMessage, injectPrio]
     assumption
+
+theorem unliftMessage_roundTrip [DecidableEq α] (ms : Finset (Message α)) (msg : Message α):
+  msg ∈ ms
+  → msg.prio = default
+  → msg ∈ unliftMessages (liftMessages ms) :=
+by
+  intro Hmsg Hprio
+  simp [liftMessages, unliftMessages]
+  exists msg
+  cases msg
+  case mk msg0 p =>
+    simp [liftMessage, unliftMessage, injectPrio]
+    simp [Hmsg]
+    simp at Hprio
+    simp [Hprio]
+
+
+theorem unlift_roundTrip_in [DecidableEq α] (ms : Finset (Message α)) (msg0 : Message0 α):
+    unliftMessage msg0 ∈ ms → msg0 ∈ liftMessages ms :=
+by
+  intro Hmsg0
+  simp [unliftMessage, injectPrio] at Hmsg0
+  simp [liftMessages, liftMessage]
+  exists (unliftMessage msg0)
+
 
 def newMessages [DecidableEq α] (mq0 mq0' : MQ0 α ctx) :=
   mq0'.messages \ mq0.messages
@@ -212,14 +238,6 @@ by
   obtain ⟨Hmsg₂', Hmsg₂''⟩ := Hmsg₂'
   contradiction
 
-theorem unlift_del_messages [DecidableEq α] (mq0 mq0' : MQ0 α ctx):
-  unliftMessages (delMessages mq0 mq0')
-  = unliftMessages mq0.messages \ unliftMessages mq0'.messages :=
-by
-  unfold delMessages
-  rw [unliftMessages_sdiff]
-  sorry
-
 def updateMessages [DecidableEq α] (mq1 : MQ1 α ctx) (mq0' : MQ0 α ctx.toBoundedCtx) :=
   (mq1.messages \ (unliftMessages (delMessages mq1.lift mq0')))
   ∪ (unliftMessages (newMessages mq1.lift mq0'))
@@ -229,30 +247,81 @@ theorem updateMessages_prop₁ [DecidableEq α] (mq1 : MQ1 α ctx) (mq0' : MQ0 �
     msg0 ∉ mq1.lift.messages
     → (unliftMessage msg0) ∈ updateMessages mq1 mq0' :=
 by
-  sorry
+  intros msg0 Hmsg0₁ Hmsg0₂
+  have Hnew: msg0 ∈ (newMessages mq1.lift mq0') := by
+    simp [newMessages, Hmsg0₁]
+    simp at Hmsg0₂
+    exact Hmsg0₂
+  unfold updateMessages
+  rw [@Finset.mem_union]
+  right
+  exact unliftMessages_in (newMessages mq1.lift mq0') msg0 Hnew
+
+theorem updateMessages_prop₂ [DecidableEq α] (mq1 : MQ1 α ctx) (mq0' : MQ0 α ctx.toBoundedCtx):
+  ∀ msg0 ∈ mq0'.messages,
+    msg0 ∈ mq1.lift.messages
+    → (unliftMessage msg0) ∈ updateMessages mq1 mq0' :=
+by
+  intros msg0 Hmsg0₁ Hmsg0₂
+  unfold updateMessages
+  have H: unliftMessage msg0 ∈  mq1.messages \ unliftMessages (delMessages mq1.lift mq0') := by
+    have Hdel : msg0 ∉ delMessages mq1.lift mq0' := by
+      unfold delMessages
+      simp [Hmsg0₁, Hmsg0₂]
+    have Hmsg0₂' : unliftMessage msg0 ∈ mq1.messages := by
+      exact (Finset.mem_map' liftMessage).mp Hmsg0₂
+    have Hdel' : unliftMessage msg0 ∉ unliftMessages (delMessages mq1.lift mq0') := by
+      intro Hcontra
+      have Hcontra': msg0 ∈ delMessages mq1.lift mq0' := by
+        exact (Finset.mem_map' unliftMessage).mp Hcontra
+      contradiction
+    refine Finset.mem_sdiff.mpr ?_
+    constructor
+    · exact Hmsg0₂'
+    · exact Hdel'
+  exact Finset.mem_union_left (unliftMessages (newMessages mq1.lift mq0')) H
+
+theorem updateMessages_prop [DecidableEq α] (mq1 : MQ1 α ctx) (mq0' : MQ0 α ctx.toBoundedCtx):
+  ∀ msg0 ∈ mq0'.messages,
+    (unliftMessage msg0) ∈ updateMessages mq1 mq0' :=
+by
+  intro msg0 Hmsg0
+  by_cases msg0 ∈ mq1.lift.messages
+  case pos Hpos =>
+    exact updateMessages_prop₂ mq1 mq0' msg0 Hmsg0 Hpos
+  case neg Hneg =>
+    exact updateMessages_prop₁ mq1 mq0' msg0 Hmsg0 Hneg
 
 def MQ1.unlift [DecidableEq α] (mq1 : MQ1 α ctx) (mq0' : MQ0 α ctx.toBoundedCtx) : MQ1 α ctx :=
  { clock := mq0'.clock
-   messages := (mq1.messages \ (unliftMessages (delMessages mq1.lift mq0'))) ∪ (unliftMessages (newMessages mq1.lift mq0')) }
-
-theorem MQ1.unlift_prop₁ [DecidableEq α] (mq1 : MQ1 α ctx) (mq0' : MQ0 α ctx.toBoundedCtx):
-  unliftMessages mq0'.messages ⊆ (mq1.unlift mq0').messages :=
-by
-  sorry
-
+   messages := updateMessages mq1 mq0' }
 
 instance [instDec: DecidableEq α] : SRefinement (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) where
   unlift := MQ1.unlift
   lift_unlift := by
     intros mq1 mq0'
-    cases mq0'
-    case mk mq0'_clk qm0'_msgs =>
-      simp [FRefinement.lift]
-      unfold MQ1.unlift
+    simp [FRefinement.lift]
+    intros Hinv Hainv'
+    apply MQ0.ext
+    case clock =>
+      simp [MQ1.unlift]
+    case messages =>
       simp
-      intro Hinv Hainv'
-      simp [delMessages]
-      sorry
+      refine Finset.ext_iff.mpr ?_
+      intro msg0
+      constructor
+      case mp =>
+        intro Hmsg0
+        have Hmsg0' : unliftMessage msg0 ∈ (mq1.unlift mq0').messages := by
+          exact (Finset.mem_map' liftMessage).mp Hmsg0
+        simp [MQ1.unlift] at Hmsg0'
+        sorry
+      case mpr =>
+        intro Hmsg0
+        simp [MQ1.unlift]
+        have H : (unliftMessage msg0) ∈ updateMessages mq1 mq0' := by
+          exact updateMessages_prop mq1 mq0' msg0 Hmsg0
+        exact unlift_roundTrip_in (updateMessages mq1 mq0') msg0 H
 
   lu_default := by
     simp [FRefinement.lift, MQ1.unlift, default]
@@ -263,7 +332,7 @@ def MQ1.Init [instDec: DecidableEq α] : InitREvent (MQ0 α ctx.toBoundedCtx) (M
     init _ := { messages := ∅, clock := 0}
     safety _ := by simp [Machine.invariant]
     strengthening _ := by simp [Machine.invariant, MQ0.Init]
-    simulation _ := by simp [Machine.invariant, Refinement.refine, MQ0.Init, FRefinement.lift]
+    simulation _ := by simp [Machine.invariant, Refinement.refine, MQ0.Init, FRefinement.lift, liftMessages]
   }
 
 def MQ1.Enqueue [DecidableEq α] : OrdinaryREvent (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) (α × Prio) Unit α Unit :=
@@ -338,14 +407,14 @@ def MQ1.Enqueue [DecidableEq α] : OrdinaryREvent (MQ0 α ctx.toBoundedCtx) (MQ1
           exact ⟨Hgrd₂, Hgrd₃⟩
 
     strengthening := fun mq (x, px) => by
-      simp [Machine.invariant, FRefinement.lift, MQ0.Enqueue]
+      simp [Machine.invariant, FRefinement.lift, MQ0.Enqueue, liftMessages]
       intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd₁ Hgrd₂ Hgrd₃
       exact Hgrd₁
 
     simulation := fun mq (x, px) => by
       simp [Machine.invariant, FRefinement.lift, MQ0.Enqueue]
       intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd₁ Hgrd₂ Hgrd₃
-      simp [Finset.map_union]
+      simp [liftMessages, liftMessage, Finset.map_union]
 
   }
 
@@ -528,12 +597,12 @@ def MQ1.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (M
       exact maxPrio_max mq msg' Hmsg'
 
     strengthening mq _ := by
-      simp [Machine.invariant, Refinement.refine, MQ0.Dequeue, FRefinement.lift]
+      simp [Machine.invariant, Refinement.refine, MQ0.Dequeue, FRefinement.lift, liftMessages]
 
     simulation mq _ := by
-      simp [Machine.invariant, Refinement.refine, MQ0.Dequeue, FRefinement.lift]
+      simp [Machine.invariant, Refinement.refine, MQ0.Dequeue, FRefinement.lift, liftMessages]
       intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd y py mq' msg Hmsg Hy Hpy Hmq' Hprio
-      simp [Hmq']
+      simp [Hmq', liftMessages]
       exists msg
       simp [Hmsg, Hy]
       simp [Finset_map_sdiff]
@@ -739,7 +808,7 @@ def MQ1.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (M
       simp [Machine.invariant, Refinement.refine, MQ0.Discard, FRefinement.lift]
 
     simulation := fun mq _ => by
-      simp [Machine.invariant, Refinement.refine, MQ0.Discard, FRefinement.lift]
+      simp [Machine.invariant, Refinement.refine, MQ0.Discard, FRefinement.lift, liftMessages]
       intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd mq' Hmq' ms Hms₁ Hms₂ Hmq'' Hprio
       constructor
       case left => exact Hmq'
