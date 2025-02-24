@@ -160,8 +160,30 @@ by
 def newMessages [DecidableEq α] (mq0 mq0' : MQ0 α ctx) :=
   mq0'.messages \ mq0.messages
 
+def newMessages_Sub [DecidableEq α] (mq0 mq0' : MQ0 α ctx):
+  (newMessages mq0 mq0') ⊆ mq0'.messages :=
+by
+  simp [newMessages]
+
+def newMessages_Disjoint [DecidableEq α] (mq0 mq0' : MQ0 α ctx):
+  Disjoint (newMessages mq0 mq0') mq0.messages :=
+by
+  simp [newMessages]
+  exact Finset.sdiff_disjoint
+
 def delMessages [DecidableEq α] (mq0 mq0' : MQ0 α ctx) :=
   mq0.messages \ mq0'.messages
+
+def delMessages_Sub [DecidableEq α] (mq0 mq0' : MQ0 α ctx):
+  (delMessages mq0 mq0') ⊆ mq0.messages :=
+by
+  simp [delMessages]
+
+def delMessages_Disjoint [DecidableEq α] (mq0 mq0' : MQ0 α ctx):
+  Disjoint (delMessages mq0 mq0') mq0'.messages :=
+by
+  simp [delMessages]
+  exact Finset.sdiff_disjoint
 
 theorem newDelMessages_Disjoint [DecidableEq α] (mq0 mq0' : MQ0 α ctx):
   Disjoint (newMessages mq0 mq0')
