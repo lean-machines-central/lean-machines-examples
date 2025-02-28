@@ -39,7 +39,7 @@ instance [instDec: DecidableEq α]: Machine MQContext (MQ2 α (instDec:=instDec)
   context := ctx
   invariant mq := mq.queue.length ≤ ctx.maxCount
                   ∧ (∀ msg ∈ mq.queue, msg.timestamp < mq.clock)
-                  ∧ (∀ msg₁ ∈ mq.queue, ∀ msg₂ ∈ mq.queue, msg₁.timestamp = msg₂.timestamp → msg₁ = msg₂)
+                  ∧ (∀ msg₁ ∈ mq.queue, ∀ msg₂ ∈ mq.queue, msg₁.timestamp = msg₂.timestamp ↔ msg₁ = msg₂)
                   ∧ (∀ msg ∈ mq.queue, ctx.minPrio ≤ msg.prio ∧ msg.prio ≤ ctx.maxPrio)
                   ∧ mq.queue.Nodup
   default := { queue := [], clock := 0}
@@ -139,8 +139,8 @@ instance [instDec: DecidableEq α] : FRefinement (MQ1 α ctx) (MQ2 α ctx) where
     constructor
     · intros msg Hmsg ; exact Hinv₂ msg Hmsg
     constructor
-    · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
-      exact Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
+    · intros msg₁ Hmsg₁ msg₂ Hmsg₂
+      exact Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂
     · intros msg Hmsg
       exact Hinv₄ msg Hmsg
 
@@ -217,19 +217,26 @@ def MQ2.Enqueue [DecidableEq α]: OrdinaryREvent (MQ1 α ctx) (MQ2 α ctx) (α �
         exact Nat.lt_succ_of_lt (Hinv₂ msg Hmsg)
       constructor
       constructor
-      · intros msg Hmsg Hts
-        have Hclk' := Hclk msg.payload msg.prio
-        simp [Hts] at Hclk'
-        contradiction
       · intros msg Hmsg
         constructor
-        · intro Hts
-          have Hclk' := Hclk msg.payload msg.prio
-          simp [←Hts] at Hclk'
-          have Hmsg' : msg ∈ mq.messages := by exact in_queue_in_messages mq msg Hmsg
-          contradiction
-        · intros msg' Hmsg' Hts
-          exact Hinv₃ msg Hmsg msg' Hmsg' Hts
+        · intro Hclk
+          rw [Hclk]
+          exact
+            (Message.timestamp_ax { payload := x, timestamp := msg.timestamp, prio := px } msg).mpr
+              rfl
+        · intro Hmsg'
+          simp [←Hmsg']
+      · intros msg Hmsg
+        constructor
+        · constructor
+          · intro Hclk
+            exact
+              (Message.timestamp_ax msg { payload := x, timestamp := mq.clock, prio := px }).mpr
+                Hclk
+          · intro Hmsg'
+            simp [Hmsg']
+        · intros msg' Hmsg'
+          exact Hinv₃ msg Hmsg msg' Hmsg'
       constructor
       constructor
       · exact ⟨Hgrd₂, Hgrd₃⟩
@@ -507,14 +514,10 @@ def MQ2.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
         rw [Hclk]
         exact Hinv₂ msg' Hmsg''
       constructor
-      · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
-        have Hmsg₁' : msg₁ ≠ msg := by
-          exact HmsgLemma₂ msg₁ Hmsg₁
-        have Hmsg₂' : msg₂ ≠ msg := by
-          exact HmsgLemma₂ msg₂ Hmsg₂
-        have Hmsg₁'' : msg₁ ∈ mq.queue := by exact HmsgLemma₃ msg₁ Hmsg₁ (HmsgLemma₂ msg₁ Hmsg₁)
-        have Hmsg₂'' : msg₂ ∈ mq.queue := by exact HmsgLemma₃ msg₂ Hmsg₂ (HmsgLemma₂ msg₂ Hmsg₂)
-        exact Hinv₃ msg₁ Hmsg₁'' msg₂ Hmsg₂'' Hts
+      · intros msg₁ Hmsg₁ msg₂ Hmsg₂
+        apply Hinv₃
+        · exact HmsgLemma₃ msg₁ Hmsg₁ (HmsgLemma₂ msg₁ Hmsg₁)
+        · exact HmsgLemma₃ msg₂ Hmsg₂ (HmsgLemma₂ msg₂ Hmsg₂)
       constructor
       · intros msg' Hmsg'
         by_cases msg' ∈ mq.queue
@@ -653,8 +656,8 @@ def MQ2.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
         rw [Hclk]
         exact Hinv₂ msg (Hin msg Hmsg)
       constructor
-      · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
-        exact Hinv₃ msg₁ (Hin msg₁ Hmsg₁) msg₂ (Hin msg₂ Hmsg₂) Hts
+      · intros msg₁ Hmsg₁ msg₂ Hmsg₂
+        exact Hinv₃ msg₁ (Hin msg₁ Hmsg₁) msg₂ (Hin msg₂ Hmsg₂)
       constructor
       · intros msg Hmsg
         exact Hinv₄ msg (Hin msg Hmsg)
