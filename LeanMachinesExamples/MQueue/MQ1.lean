@@ -34,17 +34,44 @@ structure MQ1 (α : Type 0) [instDec: DecidableEq α] (ctx : MQContext)
     extends Clocked where
   messages : Finset (Message α)
 
--- We axiomatize the fact that lifting messages is injective
-axiom liftMessage_inj_ax {α} [instDec: DecidableEq α]:
-  Function.Injective (Message.toMessage0 (instDec:=instDec))
+-- We axiomatize the fact that messages in MQ1 are forming
+-- a set wrt. their timestamp
+axiom Message0.timestamp_ax {α} [instDec: DecidableEq α]:
+  ∀ msg₁ msg₂ : Message0 α, msg₁ = msg₂ ↔ msg₁.timestamp = msg₂.timestamp
 
-def liftMessage [DecidableEq α] : Function.Embedding (Message α) (Message0 α) :=
+axiom Message.timestamp_ax {α} [instDec: DecidableEq α]:
+  ∀ msg₁ msg₂ : Message α, msg₁ = msg₂ ↔ msg₁.timestamp = msg₂.timestamp
+
+/- the axiom seems ok
+theorem bad {α : Type} [instDec: DecidableEq α] (msg₁ msg₂ : Message α):
+  true = false :=
+  by
+    have Hax := Message.timestamp_ax (α:=α) (instDec:=instDec) msg₁ msg₂
+    cases msg₁
+    case mk m₁ p₁ =>
+    cases msg₂
+    case mk m₂ p₂ =>
+      simp at Hax
+      cases m₁
+      case mk d₁ r₁ =>
+      cases m₂
+      case mk d₂ r₂ =>
+        simp at *
+        -- don't see how to prove False
+-/
+
+def liftMessage [DecidableEq α]:
+    Function.Embedding (Message α) (Message0 α) :=
   {
     toFun := Message.toMessage0
-    inj' := liftMessage_inj_ax
+    inj' := by simp [Function.Injective]
+               intros msg₁ msg₂
+               rw [@Message0.ext_iff]
+               simp [@Message.timestamp_ax]
   }
 
-def liftMessages [DecidableEq α] (ms : Finset (Message α)) : Finset (Message0 α) :=
+def liftMessages [DecidableEq α]
+  (ms : Finset (Message α)) : Finset (Message0 α) :=
   Finset.map liftMessage ms
 
 theorem liftMessages_in [DecidableEq α] (ms : Finset (Message α)):
@@ -61,13 +88,15 @@ def MQ1.lift [DecidableEq α] (mq : MQ1 α ctx) : MQ0 α ctx.toBoundedCtx :=
 theorem MQ1.lift_in [DecidableEq α] (mq : MQ1 α ctx):
   ∀ msg ∈ mq.messages, (liftMessage msg) ∈ mq.lift.messages :=
 by
+  intros msg Hmsg
   apply liftMessages_in
+  · exact Hmsg
 
 instance [instDec: DecidableEq α]: Machine MQContext (MQ1 α (instDec:=instDec) ctx) where
   context := ctx
   invariant mq := mq.messages.card ≤ ctx.maxCount
                   ∧ (∀ msg ∈ mq.messages, msg.timestamp < mq.clock)
-                  ∧ (∀ msg₁ ∈ mq.messages, ∀ msg₂ ∈ mq.messages, msg₁.timestamp = msg₂.timestamp → msg₁ = msg₂)
+                  ∧ (∀ msg₁ ∈ mq.messages, ∀ msg₂ ∈ mq.messages, msg₁.timestamp = msg₂.timestamp ↔ msg₁ = msg₂)
                   ∧ (∀ msg ∈ mq.messages, ctx.minPrio ≤ msg.prio ∧ msg.prio ≤ ctx.maxPrio)
   default := { messages := ∅, clock := 0}
 
@@ -90,10 +119,22 @@ instance [instDec: DecidableEq α] : FRefinement (MQ0 α ctx.toBoundedCtx) (MQ1 
     · intros msg Hmsg ; exact Hinv₂ msg Hmsg
     · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
       simp [liftMessage] at Hts
-      exact Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
+      -- we could directly use the timestamp axiom
+      -- but the less we rely on an axiom, the better
+      -- exact (Message.timestamp_ax msg₁ msg₂).mpr Hts
+      apply (Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂).1
+      · exact Hts
 
 def injectPrio [DecidableEq α] (msg0 : Message0 α) : Message α :=
   { msg0 with prio := default }
+
+-- We can abstract from priorities when comparing messages
+theorem injectPrio_abs [DecidableEq α] (msg : Message α):
+  injectPrio msg.toMessage0 = msg :=
+by
+  have Hts: (injectPrio msg.toMessage0).timestamp = msg.timestamp := by
+    exact rfl
+  exact (Message.timestamp_ax (injectPrio msg.toMessage0) msg).mpr Hts
 
 def unliftMessage [DecidableEq α]: Message0 α ↪ Message α :=
   { toFun := injectPrio
@@ -160,19 +201,14 @@ by
 
 theorem unliftMessage_roundTrip [DecidableEq α] (ms : Finset (Message α)) (msg : Message α):
   msg ∈ ms
-  → msg.prio = default
   → msg ∈ unliftMessages (liftMessages ms) :=
 by
-  intro Hmsg Hprio
+  intros Hmsg
   simp [liftMessages, unliftMessages]
   exists msg
-  cases msg
-  case mk msg0 p =>
-    simp [liftMessage, unliftMessage, injectPrio]
-    simp [Hmsg]
-    simp at Hprio
-    simp [Hprio]
-
+  simp [Hmsg]
+  simp [liftMessage, unliftMessage]
+  exact injectPrio_abs msg
 
 theorem unlift_roundTrip_in [DecidableEq α] (ms : Finset (Message α)) (msg0 : Message0 α):
     unliftMessage msg0 ∈ ms → msg0 ∈ liftMessages ms :=
@@ -181,7 +217,6 @@ by
   simp [unliftMessage, injectPrio] at Hmsg0
   simp [liftMessages, liftMessage]
   exists (unliftMessage msg0)
-
 
 def newMessages [DecidableEq α] (mq0 mq0' : MQ0 α ctx) :=
   mq0'.messages \ mq0.messages
@@ -292,53 +327,60 @@ by
   case neg Hneg =>
     exact updateMessages_prop₁ mq1 mq0' msg0 Hmsg0 Hneg
 
-theorem updateMessages_prop'₁ [DecidableEq α] (mq1 : MQ1 α ctx) (mq0' : MQ0 α ctx.toBoundedCtx):
-  ∀ msg ∈ (mq1.messages \ (unliftMessages (delMessages mq1.lift mq0'))),
-    liftMessage msg ∈ mq0'.messages :=
-by
-  intro msg
-  simp [delMessages]
-  intros Hmsg₁ Hmsg₂
-  have H₁: liftMessage msg ∈ liftMessages mq1.messages := by
-    exact liftMessages_in mq1.messages msg Hmsg₁
-  by_cases Hcut : liftMessage msg ∈ mq0'.messages
-  case pos Hcut =>
-    assumption
-  case neg Hcut =>
-    cases msg
-    case mk msg0 p =>
-      simp [liftMessage] at *
-      by_cases p = default
-      case pos Hpos =>
-        simp [Hpos] at *
-        have H₂: unliftMessage msg0 ∈ unliftMessages (liftMessages mq1.messages) := by
-          exact unliftMessages_in (liftMessages mq1.messages) msg0 H₁
-        have Hcontra: { toMessage0 := msg0, prio := default } ∈ unliftMessages (liftMessages mq1.messages \ mq0'.messages) := by
-          simp [unliftMessages, liftMessages]
-          exists msg0
-          constructor
-          case left =>
-            constructor
-            exists (unliftMessage msg0)
-            exact Hcut
-          case right =>
-            simp [unliftMessage, injectPrio]
-        contradiction
-      case neg Hneg =>
-        simp [liftMessages] at H₁
-        obtain ⟨msg, ⟨Hmsg₃, Hmsg₄⟩⟩ := H₁
-        simp [liftMessage] at Hmsg₄
-        cases msg
-        case mk msg0' p' =>
-          simp at Hmsg₄
-          sorry -- probably this case is false
-
 theorem updateMessages_prop' [DecidableEq α] (mq1 : MQ1 α ctx) (mq0' : MQ0 α ctx.toBoundedCtx):
-  ∀ msg0,  (unliftMessage msg0) ∈ updateMessages mq1 mq0'
-  → msg0 ∈ mq0'.messages :=
+  ∀ msg0 ∈ mq0'.messages,
+    msg0 ∈ liftMessages (updateMessages mq1 mq0') :=
 by
-  sorry
+  intro msg0 Hmsg0
+  refine unlift_roundTrip_in (updateMessages mq1 mq0') msg0 ?_
+  exact updateMessages_prop mq1 mq0' msg0 Hmsg0
 
+theorem lift_updateᵣ [DecidableEq α] (mq1 : MQ1 α ctx) (mq0' : MQ0 α ctx.toBoundedCtx):
+  mq0'.messages ⊆ liftMessages (updateMessages mq1 mq0') :=
+by
+  refine Finset.subset_iff.mpr ?_
+  intros msg Hmsg
+  exact updateMessages_prop' mq1 mq0' msg Hmsg
+
+theorem lift_updateₗ [DecidableEq α] (mq1 : MQ1 α ctx) (mq0' : MQ0 α ctx.toBoundedCtx):
+ liftMessages (updateMessages mq1 mq0') ⊆ mq0'.messages :=
+by
+  refine Finset.subset_iff.mpr ?_
+  intro msg0
+  simp [updateMessages, delMessages, newMessages, liftMessages, unliftMessages, liftMessage, unliftMessage]
+  intros msg Hmsg Hlift
+  cases Hmsg
+  case inl Hmsg =>
+    obtain ⟨H₁,H₂⟩ := Hmsg
+    have H₂' := H₂ msg H₁
+    by_cases msg0 ∈ mq0'.messages
+    case pos Hpos =>
+      exact Hpos
+    case neg Hneg =>
+      rw [Hlift] at H₂'
+      have H₂'' := H₂' Hneg
+      rw [←Hlift] at H₂''
+      have Hcontra: injectPrio msg.toMessage0 = msg := by
+        exact injectPrio_abs msg
+      contradiction
+  case inr Hmsg =>
+    obtain ⟨msg0', Hmsg0'⟩ := Hmsg
+    obtain ⟨⟨H₁,H₂⟩,H₃⟩ := Hmsg0'
+    rw [@Message.timestamp_ax, injectPrio] at H₃
+    simp at H₃
+    simp [Hlift] at H₃
+    have Hex : msg0' = msg0 := by
+      -- we use the payload abstraction axiom
+      exact (Message0.timestamp_ax msg0' msg0).mpr H₃
+    simp [←Hex, H₁]
+
+theorem lift_update [DecidableEq α] (mq1 : MQ1 α ctx) (mq0' : MQ0 α ctx.toBoundedCtx):
+ liftMessages (updateMessages mq1 mq0') = mq0'.messages :=
+by
+  refine Finset.Subset.antisymm_iff.mpr ?_
+  constructor
+  · exact lift_updateₗ mq1 mq0'
+  · exact lift_updateᵣ mq1 mq0'
 
 def MQ1.unlift [DecidableEq α] (mq1 : MQ1 α ctx) (mq0' : MQ0 α ctx.toBoundedCtx) : MQ1 α ctx :=
  { clock := mq0'.clock
@@ -354,27 +396,15 @@ instance [instDec: DecidableEq α] : SRefinement (MQ0 α ctx.toBoundedCtx) (MQ1 
     case clock =>
       simp [MQ1.unlift]
     case messages =>
-      simp
-      refine Finset.ext_iff.mpr ?_
-      intro msg0
-      constructor
-      case mp =>
-        intro Hmsg0
-        have Hmsg0' : unliftMessage msg0 ∈ (mq1.unlift mq0').messages := by
-          exact (Finset.mem_map' liftMessage).mp Hmsg0
-        simp [MQ1.unlift] at Hmsg0'
-        sorry
-
-      case mpr =>
-        intro Hmsg0
-        simp [MQ1.unlift]
-        have H : (unliftMessage msg0) ∈ updateMessages mq1 mq0' := by
-          exact updateMessages_prop mq1 mq0' msg0 Hmsg0
-        exact unlift_roundTrip_in (updateMessages mq1 mq0') msg0 H
+      simp [MQ1.unlift]
+      exact lift_update mq1 mq0'
 
   lu_default := by
     simp [FRefinement.lift, MQ1.unlift, default]
-    sorry -- TODO
+    intros am' Ham'
+    simp [updateMessages, newMessages]
+    rw [@liftMessage_roundTrip]
+    simp [liftMessages]
 
 def MQ1.Init [instDec: DecidableEq α] : InitREvent (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) Unit Unit :=
   newInitREvent'' MQ0.Init.toInitEvent {
@@ -415,38 +445,9 @@ def MQ1.Enqueue [DecidableEq α] : OrdinaryREvent (MQ0 α ctx.toBoundedCtx) (MQ1
           simp [Hmsg]
           exact Nat.lt_add_one mq.clock.val
       constructor
-      · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
-        cases Hmsg₁
-        case _ Hmsg₁ =>
-          cases Hmsg₂
-          case _ Hmsg₂ =>
-            exact Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
-          case _ Hmsg₂ =>
-            have Hck₁ : msg₁.timestamp = mq.clock := by
-              simp [Hmsg₂, Hts]
-            have Hck₂ : msg₁.timestamp < mq.clock := by
-              exact Hinv₂ msg₁ Hmsg₁
-            rw [Hck₁] at Hck₂
-            have Hck₂' : mq.clock.val < mq.clock.val := by
-              exact Hck₂
-            have Hcontra : False := by
-              exact (lt_self_iff_false mq.clock.val).mp Hck₂'
-            contradiction
-        case _ Hmsg₁ =>
-          cases Hmsg₂
-          case _ Hmsg₂ =>
-            have Hck₁ : msg₂.timestamp = mq.clock := by
-              simp [Hmsg₁, ←Hts]
-            have Hck₂ : msg₂.timestamp < mq.clock := by
-              exact Hinv₂ msg₂ Hmsg₂
-            rw [Hck₁] at Hck₂
-            have Hck₂' : mq.clock.val < mq.clock.val := by
-              exact Hck₂
-            have Hcontra : False := by
-              exact (lt_self_iff_false mq.clock.val).mp Hck₂'
-            contradiction
-          case _ Hmsg₂ =>
-            simp [Hmsg₁, Hmsg₂]
+      · intros msg₁ msg₁' msg₂ Hmsg₂
+        -- we use the timestamp axiom here
+        exact Iff.symm (Message.timestamp_ax msg₁ msg₂)
       · intros msg Hmsg
         cases Hmsg
         case _ Hmsg =>
@@ -624,12 +625,8 @@ def MQ1.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (M
           exact Hsub Hmsg'
         exact Hinv₂ msg' (Hsub Hmsg')
       constructor
-      · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
-        have Hmsg₁' : msg₁ ∈ mq.messages := by
-          exact Hsub Hmsg₁
-        have Hmsg₂' : msg₂ ∈ mq.messages := by
-          exact Hsub Hmsg₂
-        exact Hinv₃ msg₁ (Hsub Hmsg₁) msg₂ Hmsg₂' Hts
+      · intros msg₁ Hmsg₁ msg₂ Hmsg₂
+        exact Hinv₃ msg₁ (Hsub Hmsg₁) msg₂ (Hsub Hmsg₂)
       · intros msg Hmsg
         exact Hinv₄ msg (Hsub Hmsg)
 
@@ -827,8 +824,8 @@ def MQ1.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (M
         intros msg Hmsg₁ Hmsg₂
         exact Hinv₂ msg Hmsg₁
       constructor
-      · intros msg₁ Hmsg₁ Hmsg₁' msg₂ Hmsg₂ Hmsg₂' Hts
-        exact Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
+      · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts Hne
+        exact Hinv₃ msg₁ Hmsg₁ Hmsg₂ Hts
       · intros msg Hmsg Hmsg'
         exact Hinv₄ msg Hmsg
 
@@ -864,9 +861,7 @@ def MQ1.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (M
       case right =>
         exists (Finset.map liftMessage ms)
         simp [Hms₁, Hms₂, Hmq'']
-        exact
-          Finset_map_sdiff mq.messages ms
-            { toFun := Message.toMessage0, inj' := liftMessage_inj_ax }
+        exact Finset_map_sdiff mq.messages ms liftMessage
   }
 
 def shiftPrio  [DecidableEq α] (n : Nat) (msg : Message α) : Message α :=
@@ -908,13 +903,20 @@ def MQ1.ShiftPrio [DecidableEq α] : OrdinaryRDetEvent (MQ0 α ctx.toBoundedCtx)
       constructor
       · intros msg Hmsg ; exact Hinv₂ msg Hmsg
       constructor
-      · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
-        have Heq₁ : msg₁.toMessage0 = msg₂.toMessage0 := by
-          exact congrArg Message.toMessage0 (Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂ Hts)
-        simp [Heq₁]
-        have Heq₂ : msg₁.prio = msg₂.prio := by
-          exact congrArg Message.prio (Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂ Hts)
-        exact congrFun (congrArg HAdd.hAdd Heq₂) { prio := n }
+      · intros msg₁ Hmsg₁ msg₂ Hmsg₂
+        constructor
+        · intro Hts
+          have Heq: msg₁ = msg₂ := by
+              exact (Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂).1 Hts
+          constructor <;> simp [Heq]
+        · intro ⟨Heq₁,Heq₂⟩
+          cases msg₁
+          case mk m₁ p₁ =>
+          cases msg₂
+          case mk m₂ p₂ =>
+            simp
+            simp at Heq₁
+            simp [Heq₁]
       · intros msg Hmsg
         constructor
         · have H₁ : ctx.minPrio ≤ msg.prio := by
@@ -936,9 +938,42 @@ def MQ1.ShiftPrio [DecidableEq α] : OrdinaryRDetEvent (MQ0 α ctx.toBoundedCtx)
               ctx.maxPrio H₃ Hgrd
 
     simulation mq n := by
-      simp [Machine.invariant, FRefinement.lift, shiftPrio', shiftPrio]
+      simp [Machine.invariant, FRefinement.lift]
       intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd
-      sorry
+      simp [liftMessages]
+      refine Finset.ext_iff.mpr ?_
+      intro msg
+      constructor
+      case mp =>
+        intro Hmsg
+        simp [shiftPrio']
+        exists { msg with prio := msg.prio + (Prio.mk n)}
+        constructor
+        case left =>
+          have Heq : { msg with prio := msg.prio + (Prio.mk n)} = msg := by
+            exact
+              (Message.timestamp_ax
+                    { toMessage0 := msg.toMessage0, prio := msg.prio + { prio := n } } msg).mpr
+                rfl
+          simp [Heq]
+          exact Hmsg
+        case right =>
+          simp [shiftPrio]
+          exact
+            (Message.timestamp_ax
+                  { toMessage0 := msg.toMessage0, prio := msg.prio + { prio := n } + { prio := n } }
+                  msg).mpr
+              rfl
+
+      case mpr =>
+        simp [shiftPrio', shiftPrio]
+        intro msg' Hmsg' Heq
+        have Heq': msg'.timestamp = msg.timestamp := by
+          rw [←Heq]
+        have Heq'': msg' = msg := by
+          exact (Message.timestamp_ax msg' msg).mpr Heq'
+        rw [←Heq'']
+        exact Hmsg'
 
   }
 
