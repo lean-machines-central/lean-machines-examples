@@ -32,7 +32,7 @@ instance [instDec: DecidableEq α]: Machine MQContext (MQ4 α (instDec:=instDec)
                   ∧ (∀ msg₁ ∈ mq.queue, ∀ msg₂ ∈ mq.queue, msg₁.timestamp = msg₂.timestamp ↔ msg₁ = msg₂)
                   ∧ (∀ msg ∈ mq.queue, ctx.minPrio ≤ msg.prio ∧ msg.prio ≤ ctx.maxPrio)
                   ∧ mq.queue.toList.Nodup
-                  ∧ mq.sigs.Sorted (·≤·)
+                  ∧ mq.sigs.Sorted (·≥·)
   default := { queue := #[], clock := 0}
 
 theorem List_Sorted_append [Preorder α] (xs : List α) (x : α):
@@ -52,6 +52,26 @@ by
         exact Hinf' z Hz
       case inr Hz =>
         exact le_of_le_of_eq Hinf (id (Eq.symm Hz))
+    case right =>
+      exact Hind Hin Hsort
+
+theorem List_Sorted_append' [Preorder α] (xs : List α) (x : α):
+  (∀ y ∈ xs, x ≤ y) → List.Sorted (fun x₁ x₂ => x₂ ≤ x₁) xs
+  → List.Sorted (fun x₁ x₂ => x₂ ≤ x₁) (xs ++ [x]) :=
+by
+  induction xs
+  case nil => simp
+  case cons x' xs Hind =>
+    simp
+    intros Hinf Hin Hinf' Hsort
+    constructor
+    case left =>
+      intros z Hz
+      cases Hz
+      case inl Hz =>
+        exact Hinf' z Hz
+      case inr Hz =>
+        exact le_of_eq_of_le Hz Hinf
     case right =>
       exact Hind Hin Hsort
 
@@ -79,13 +99,12 @@ by
   case nil => simp
   case cons x xs Hind =>
     simp
-    intros Hinf Hsort
-    apply List_Sorted_append (xs.reverse) x
-    · intro y Hy
-      have Hy' : y ∈ xs := by
-        exact List.mem_reverse.mp Hy
-      exact Hinf y Hy'
-    · exact Hind Hsort
+    intro Hinf Hsort
+    refine List_Sorted_append' xs.reverse x ?_ (Hind Hsort)
+    intros y Hy
+    have Hinf' := Hinf y
+    apply Hinf'
+    exact List.mem_reverse.mp Hy
 
 instance [DecidableEq α] [Preorder α]: SRefinement (MQ3 α ctx) (MQ4 α ctx) where
   lift := MQ4.lift
@@ -104,10 +123,8 @@ instance [DecidableEq α] [Preorder α]: SRefinement (MQ3 α ctx) (MQ4 α ctx) w
     · apply Hinv₄
     constructor
     · exact Hinv₅
-    · have Hsort := List_Sorted_reverse mq.sigs
-
-
-
+    · simp [MQ4.sigs, MQ4.lift] at Hinv₆
+      exact Hinv₆
 
   unlift := MQ4.unlift
   lu_default mq := by
@@ -116,8 +133,7 @@ instance [DecidableEq α] [Preorder α]: SRefinement (MQ3 α ctx) (MQ4 α ctx) w
   lift_unlift mq amq := by
     simp [FRefinement.lift, MQ4.unlift, MQ4.lift]
 
-
-def MQ4.Init [DecidableEq α] : InitREvent (MQ3 α ctx) (MQ4 α ctx) Unit Unit :=
+def MQ4.Init [DecidableEq α] [Preorder α]: InitREvent (MQ3 α ctx) (MQ4 α ctx) Unit Unit :=
   newInitSREvent'' MQ3.Init.toInitEvent {
     init _ := { queue := #[], clock := 0}
     safety _ := by
@@ -172,7 +188,7 @@ axiom Array_insertionSort_Sorted {α} (as : Array α) (lt : α → α → Bool):
 axiom Array_insertionSort_List_InsertionSort {α} (as : Array α) (lt : α → α → Bool):
   (as.insertionSort (lt:=lt)).toList = (as.toList).insertionSort (fun x₁ x₂ => lt x₁ x₂)
 
-def MQ4.Enqueue [DecidableEq α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) (α × Prio) Unit :=
+def MQ4.Enqueue [DecidableEq α] [Preorder α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) (α × Prio) Unit :=
   newSREvent' MQ3.Enqueue.toOrdinaryEvent {
     lift_in := id
 
@@ -249,7 +265,7 @@ def MQ4.Enqueue [DecidableEq α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) (α �
   }
 
 
-def MQ4.Dequeue [DecidableEq α] [Inhabited α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) Unit (α × Prio) :=
+def MQ4.Dequeue [DecidableEq α] [Inhabited α] [Preorder α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) Unit (α × Prio) :=
   newSREvent MQ3.Dequeue.toOrdinaryEvent {
     lift_in := id
     lift_out := id
@@ -262,7 +278,7 @@ def MQ4.Dequeue [DecidableEq α] [Inhabited α]: OrdinaryREvent (MQ3 α ctx) (MQ
     strengthening mq _ grd := sorry
   }
 
-def MQ4.Discard [DecidableEq α] : OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) Clock (List (Message α)) :=
+def MQ4.Discard [DecidableEq α] [Preorder α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) Clock (List (Message α)) :=
   newAbstractSREvent MQ3.Discard.toOrdinaryEvent {
     step_inv mq clk := by sorry
 
