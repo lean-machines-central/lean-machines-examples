@@ -576,7 +576,7 @@ instance [instDec: DecidableEq α]: Machine MQContext (MQ3 α (instDec:=instDec)
   context := ctx
   invariant mq := mq.queue.length ≤ ctx.maxCount
                   ∧ (∀ msg ∈ mq.queue, msg.timestamp < mq.clock)
-                  ∧ (∀ msg₁ ∈ mq.queue, ∀ msg₂ ∈ mq.queue, msg₁.timestamp = msg₂.timestamp → msg₁ = msg₂)
+                  ∧ (∀ msg₁ ∈ mq.queue, ∀ msg₂ ∈ mq.queue, msg₁.timestamp = msg₂.timestamp ↔ msg₁ = msg₂)
                   ∧ (∀ msg ∈ mq.queue, ctx.minPrio ≤ msg.prio ∧ msg.prio ≤ ctx.maxPrio)
                   ∧ mq.queue.Nodup
                   ∧ mq.sigs.Sorted (·≥·)
@@ -636,12 +636,12 @@ instance [instDec: DecidableEq α] : Refinement (MQ2 α ctx) (MQ3 α ctx) where
         exact (List.Perm.mem_iff (id (List.Perm.symm Href₁))).mp Hmsg
       exact Hinv₂ msg Hin
     constructor
-    · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
+    · intros msg₁ Hmsg₁ msg₂ Hmsg₂
       have Hin₁ : msg₁ ∈ mq.queue := by
         exact (List.Perm.mem_iff (id (List.Perm.symm Href₁))).mp Hmsg₁
       have Hin₂ : msg₂ ∈ mq.queue := by
         exact (List.Perm.mem_iff (id (List.Perm.symm Href₁))).mp Hmsg₂
-      exact Hinv₃ msg₁ Hin₁ msg₂ Hin₂ Hts
+      exact Hinv₃ msg₁ Hin₁ msg₂ Hin₂
     constructor
     · intros msg Hmsg
       have Hin : msg ∈ mq.queue := by
@@ -802,20 +802,24 @@ def MQ3.Enqueue [DecidableEq α]: OrdinaryREvent (MQ2 α ctx) (MQ3 α ctx) (α �
         exact Nat.lt_succ_of_lt (Hinv₂ msg Hmsg)
       constructor
       constructor
-      · intros msg Hmsg Hts
-        simp [Hts]
-        have Hclk' := Hclk msg.payload msg.prio
-        simp [Hts] at Hclk'
-        contradiction
       · intros msg Hmsg
         constructor
-        · intro Hts
-          simp [←Hts]
-          have Hclk' := Hclk msg.payload msg.prio
-          simp [←Hts] at Hclk'
-          contradiction
-        · intros msg' Hmsg' Hts
-          exact Hinv₃ msg Hmsg msg' Hmsg' Hts
+        · intro Hclk'
+          exact
+            (Message.timestamp_ax { payload := x, timestamp := mq.clock, prio := px } msg).mpr Hclk'
+        · intro Hmsg'
+          simp [←Hmsg']
+      · intros msg Hmsg
+        constructor
+        · constructor
+          · intro Hclk'
+            exact
+              (Message.timestamp_ax msg { payload := x, timestamp := mq.clock, prio := px }).mpr
+                Hclk'
+          · intro Hmsg'
+            simp [Hmsg']
+        · intros msg' Hmsg'
+          exact Hinv₃ msg Hmsg msg' Hmsg'
       constructor
       constructor
       · exact ⟨Hgrd₂, Hgrd₃⟩
