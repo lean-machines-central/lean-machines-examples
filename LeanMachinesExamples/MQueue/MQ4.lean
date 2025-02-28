@@ -29,13 +29,65 @@ instance [instDec: DecidableEq α]: Machine MQContext (MQ4 α (instDec:=instDec)
   context := ctx
   invariant mq := mq.queue.size ≤ ctx.maxCount
                   ∧ (∀ msg ∈ mq.queue, msg.timestamp < mq.clock)
-                  ∧ (∀ msg₁ ∈ mq.queue, ∀ msg₂ ∈ mq.queue, msg₁.timestamp = msg₂.timestamp → msg₁ = msg₂)
+                  ∧ (∀ msg₁ ∈ mq.queue, ∀ msg₂ ∈ mq.queue, msg₁.timestamp = msg₂.timestamp ↔ msg₁ = msg₂)
                   ∧ (∀ msg ∈ mq.queue, ctx.minPrio ≤ msg.prio ∧ msg.prio ≤ ctx.maxPrio)
                   ∧ mq.queue.toList.Nodup
                   ∧ mq.sigs.Sorted (·≤·)
   default := { queue := #[], clock := 0}
 
-instance [DecidableEq α]: SRefinement (MQ3 α ctx) (MQ4 α ctx) where
+theorem List_Sorted_append [Preorder α] (xs : List α) (x : α):
+  (∀ y ∈ xs, y ≤ x) → List.Sorted (fun x₁ x₂ => x₁ ≤ x₂) xs
+  → List.Sorted (fun x₁ x₂ => x₁ ≤ x₂) (xs ++ [x]) :=
+by
+  induction xs
+  case nil => simp
+  case cons x' xs Hind =>
+    simp
+    intros Hinf Hin Hinf' Hsort
+    constructor
+    case left =>
+      intros z Hz
+      cases Hz
+      case inl Hz =>
+        exact Hinf' z Hz
+      case inr Hz =>
+        exact le_of_le_of_eq Hinf (id (Eq.symm Hz))
+    case right =>
+      exact Hind Hin Hsort
+
+theorem List_Sorted_reverse [Preorder α] (xs : List α):
+  List.Sorted (fun x1 x2 => x2 ≤ x1) xs
+  → List.Sorted (fun x1 x2  => x1 ≤ x2) xs.reverse :=
+by
+  induction xs
+  case nil => simp
+  case cons x xs Hind =>
+    simp
+    intros Hinf Hsort
+    apply List_Sorted_append (xs.reverse) x
+    · intro y Hy
+      have Hy' : y ∈ xs := by
+        exact List.mem_reverse.mp Hy
+      exact Hinf y Hy'
+    · exact Hind Hsort
+
+theorem List_Sorted_reverse' [Preorder α] (xs : List α):
+  List.Sorted (fun x1 x2 => x1 ≤ x2) xs
+  → List.Sorted (fun x1 x2  => x2 ≤ x1) xs.reverse :=
+by
+  induction xs
+  case nil => simp
+  case cons x xs Hind =>
+    simp
+    intros Hinf Hsort
+    apply List_Sorted_append (xs.reverse) x
+    · intro y Hy
+      have Hy' : y ∈ xs := by
+        exact List.mem_reverse.mp Hy
+      exact Hinf y Hy'
+    · exact Hind Hsort
+
+instance [DecidableEq α] [Preorder α]: SRefinement (MQ3 α ctx) (MQ4 α ctx) where
   lift := MQ4.lift
   lift_safe mq := by
     simp [Machine.invariant]
@@ -52,7 +104,10 @@ instance [DecidableEq α]: SRefinement (MQ3 α ctx) (MQ4 α ctx) where
     · apply Hinv₄
     constructor
     · exact Hinv₅
-    · sorry
+    · have Hsort := List_Sorted_reverse mq.sigs
+
+
+
 
   unlift := MQ4.unlift
   lu_default mq := by
@@ -159,42 +214,7 @@ def MQ4.Enqueue [DecidableEq α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) (α �
           exact Clock.succ_lt mq.clock
       constructor
       · intros msg₁ Hmsg₁ msg₂ Hmsg₂
-        have Hmsg₁' : msg₁ ∈ mq.queue.push { payload := x, timestamp := mq.clock, prio := p } := by
-          apply Array_insertionSortMemConv
-          · exact Hmsg₁
-        have Hmsg₁'' : msg₁ ∈ mq.queue ∨ msg₁ = { payload := x, timestamp := mq.clock, prio := p } := by
-          exact Array.mem_push.mp Hmsg₁'
-        have Hmsg₂' : msg₂ ∈ mq.queue.push { payload := x, timestamp := mq.clock, prio := p } := by
-          apply Array_insertionSortMemConv
-          · exact Hmsg₂
-        have Hmsg₂'' : msg₂ ∈ mq.queue ∨ msg₂ = { payload := x, timestamp := mq.clock, prio := p } := by
-          exact Array.mem_push.mp Hmsg₂'
-        intro Hts
-        cases Hmsg₁''
-        case _ Hmsg₁'' =>
-          cases Hmsg₂''
-          case _ Hmsg₂'' =>
-            exact Hinv₃ msg₁ Hmsg₁'' msg₂ Hmsg₂'' Hts
-          case _ Hmsg₂'' =>
-            have Hmsg₁''' : msg₁.timestamp < mq.clock := by
-              exact Hinv₂ msg₁ Hmsg₁''
-            simp [Hmsg₂''] at Hts
-            rw [Hts] at Hmsg₁'''
-            have Hcontra: ¬ (mq.clock < mq.clock) := by
-              exact not_lt_of_gt Hmsg₁'''
-            contradiction
-        case _ Hmsg₁'' =>
-          cases Hmsg₂''
-          case _ Hmsg₂'' =>
-            have Hmsg₂''' : msg₂.timestamp < mq.clock := by
-              exact Hinv₂ msg₂ Hmsg₂''
-            simp [Hmsg₁''] at Hts
-            rw [←Hts] at Hmsg₂'''
-            have Hcontra: ¬ (mq.clock < mq.clock) := by
-              exact not_lt_of_gt Hmsg₂'''
-            contradiction
-          case _ Hmsg₂'' =>
-            simp [Hmsg₁'', Hmsg₂'']
+        exact Iff.symm (Message.timestamp_ax msg₁ msg₂)
       constructor
       · intros msg Hmsg
         have Hmsg' : msg ∈ mq.queue.push { payload := x, timestamp := mq.clock, prio := p } := by
