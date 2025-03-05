@@ -1078,18 +1078,18 @@ def MQ3.Discard [DecidableEq α] : OrdinaryRDetEvent (MQ2 α ctx) (MQ3 α ctx) C
   newRDetEvent MQ2.Discard.toOrdinaryNDEvent {
     lift_in clk := ()
     lift_out msgs := msgs.toFinset
-    guard mq clk := mq.queue.length > 0 ∧ ∃ msg ∈ mq.queue, msg.timestamp > clk
+    guard mq clk := mq.queue.length > 0 ∧ ∃ msg ∈ mq.queue, msg.timestamp < clk
     action mq clk grd :=
-      let mq' := { mq with queue := mq.queue.filter (fun msg => msg.timestamp ≤ clk), clock := mq.clock}
-      (mq.queue.filter (fun msg => msg.timestamp > clk), mq')
+      let mq' := { mq with queue := mq.queue.filter (fun msg => msg.timestamp ≥ clk), clock := mq.clock}
+      (mq.queue.filter (fun msg => msg.timestamp < clk), mq')
 
     safety mq clk := by
       simp [Machine.invariant]
       intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hgrd₁ msg Hmsg Hclk
       constructor
-      · have H: (List.filter (fun msg => decide (msg.timestamp ≤ clk)) mq.queue).length
+      · have H: (List.filter (fun msg => decide (clk ≤ msg.timestamp)) mq.queue).length
                 ≤ mq.queue.length := by
-          exact List.length_filter_le (fun msg => decide (msg.timestamp ≤ clk)) mq.queue
+          exact List.length_filter_le (fun msg => decide (clk ≤ msg.timestamp)) mq.queue
         exact Nat.le_trans H Hinv₁
       constructor
       · intros msg Hmsg Hclk
@@ -1101,13 +1101,13 @@ def MQ3.Discard [DecidableEq α] : OrdinaryRDetEvent (MQ2 α ctx) (MQ3 α ctx) C
       · intros msg Hmsg Hmsg'
         exact Hinv₄ msg Hmsg
       constructor
-      · exact List.Nodup.filter (fun msg => decide (msg.timestamp ≤ clk)) Hinv₅
-      · have Hsort := (List.Sorted.filter (l:=List.map Message.sig mq.queue) (r:=(fun x1 x2 => x2 ≤ x1)) (f:=fun sig : MessageSig => decide (sig.2 ≤ clk)) Hinv₆)
-        have Heq : List.map Message.sig (List.filter (fun msg => msg.timestamp ≤ clk) mq.queue)
-                   = List.filter (fun sig => sig.2 ≤ clk) (List.map Message.sig mq.queue) := by
+      · exact List.Nodup.filter (fun msg => decide (clk ≤ msg.timestamp)) Hinv₅
+      · have Hsort := (List.Sorted.filter (l:=List.map Message.sig mq.queue) (r:=(fun x1 x2 => x2 ≤ x1)) (f:=fun sig : MessageSig => decide (clk ≤ sig.2)) Hinv₆)
+        have Heq : List.map Message.sig (List.filter (fun msg => clk ≤ msg.timestamp) mq.queue)
+                   = List.filter (fun sig => clk ≤ sig.2) (List.map Message.sig mq.queue) := by
           exact
-            List_filter_map mq.queue Message.sig (fun msg => decide (msg.timestamp ≤ clk))
-              (fun sig => decide (sig.2 ≤ clk)) (congrFun rfl)
+            List_filter_map mq.queue Message.sig (fun msg => decide (clk ≤ msg.timestamp))
+              (fun sig => decide (clk ≤ sig.2)) (congrFun rfl)
         simp [Heq, Hsort]
 
     strengthening mq clk := by
@@ -1119,7 +1119,39 @@ def MQ3.Discard [DecidableEq α] : OrdinaryRDetEvent (MQ2 α ctx) (MQ3 α ctx) C
         simp [←Hlen, Hgrd₁]
       exact List.ne_nil_of_length_pos H
 
-    simulation mq clk grd := by sorry
+    simulation mq clk := by
+      simp [Machine.invariant, MQ2.Discard, Refinement.refine]
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hgrd₁ msg Hmsg₁ Hmsg₂ am Ham₁ Ham₂
+      exists mq.lift
+      constructor
+      constructor
+      · simp [MQ3.lift]
+        assumption
+      · let lms := am.queue.filter (fun msg => msg.timestamp < clk)
+        exists lms.toFinset
+        constructor
+        · rw [@List.toFinset_filter]
+          exact Finset.filter_subset (fun x => decide (x.timestamp < clk) = true) am.queue.toFinset
+        constructor
+        · have Hex : ∃ msg : Message α, msg ∈ lms := by
+            exists msg
+            simp [lms, Hmsg₂]
+            exact List_Perm_in mq.queue am.queue Ham₁ msg Hmsg₁
+          have Hlms : lms ≠ [] := by
+            intro Hcontra
+            simp [Hcontra] at Hex
+          intro Hcontra
+          have Hcontra': lms = [] := by exact (List.toFinset_eq_empty_iff lms).mp Hcontra
+          contradiction
+        constructor
+        · simp [MQ3.lift]
+          sorry -- TODO
+        constructor
+        · simp [MQ3.lift]
+          sorry -- TODO
+        · sorry -- TODO
+      · sorry -- TODO
+
   }
 
 
