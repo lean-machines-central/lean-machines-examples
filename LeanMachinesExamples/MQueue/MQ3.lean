@@ -1110,7 +1110,14 @@ def MQ3.Discard [DecidableEq α] : OrdinaryRDetEvent (MQ2 α ctx) (MQ3 α ctx) C
               (fun sig => decide (sig.2 ≤ clk)) (congrFun rfl)
         simp [Heq, Hsort]
 
-    strengthening mq clk grd := by sorry
+    strengthening mq clk := by
+      simp [Machine.invariant, MQ2.Discard, Refinement.refine]
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hgrd₁ msg Hmsg₁ Hmsg₂ am Ham₁ Ham₂
+      have Hlen : mq.queue.length = am.queue.length := by
+        exact List.Perm.length_eq Ham₁
+      have H: 0 < am.queue.length := by
+        simp [←Hlen, Hgrd₁]
+      exact List.ne_nil_of_length_pos H
 
     simulation mq clk grd := by sorry
   }
