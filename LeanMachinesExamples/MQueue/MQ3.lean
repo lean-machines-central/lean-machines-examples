@@ -1042,6 +1042,38 @@ def MQ3.Dequeue [DecidableEq α] [Inhabited α]: OrdinaryRDetEvent (MQ2 α ctx) 
       · simp [Href₂]
   }
 
+theorem List_filter_sorted (xs : List α):
+  List.Sorted comp xs
+  → List.Sorted comp (xs.filter pred?) :=
+by
+  intro Hsort
+  exact List.Sorted.filter pred? Hsort
+
+theorem List_filter_map (xs : List α) (f : α → β) (fpred? : α → Bool) (gpred? : β → Bool)
+  (Heq: ∀ x, fpred? x = gpred? (f x)):
+  List.map f (List.filter fpred? xs)
+  = List.filter gpred? (List.map f xs) :=
+by
+  induction xs
+  case nil => simp
+  case cons x xs Hind =>
+    simp
+    rw [@List.filter_cons]
+    split
+    case isTrue Htrue =>
+      simp
+      rw [Hind]
+      rw [@List.filter_cons]
+      have Htrue' : gpred? (f x) = true := by
+        simp [←Heq, Htrue]
+      simp [Htrue']
+    case isFalse Hfalse =>
+      rw [Hind]
+      rw [@List.filter_cons]
+      have Hfalse': gpred? (f x) = false := by
+        simp [←Heq, Hfalse]
+      simp [Hfalse']
+
 def MQ3.Discard [DecidableEq α] : OrdinaryRDetEvent (MQ2 α ctx) (MQ3 α ctx) Clock (List (Message α)) Unit (Finset (Message α)) :=
   newRDetEvent MQ2.Discard.toOrdinaryNDEvent {
     lift_in clk := ()
@@ -1051,8 +1083,35 @@ def MQ3.Discard [DecidableEq α] : OrdinaryRDetEvent (MQ2 α ctx) (MQ3 α ctx) C
       let mq' := { mq with queue := mq.queue.filter (fun msg => msg.timestamp ≤ clk), clock := mq.clock}
       (mq.queue.filter (fun msg => msg.timestamp > clk), mq')
 
-    safety mq clk grd := by sorry
+    safety mq clk := by
+      simp [Machine.invariant]
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hgrd₁ msg Hmsg Hclk
+      constructor
+      · have H: (List.filter (fun msg => decide (msg.timestamp ≤ clk)) mq.queue).length
+                ≤ mq.queue.length := by
+          exact List.length_filter_le (fun msg => decide (msg.timestamp ≤ clk)) mq.queue
+        exact Nat.le_trans H Hinv₁
+      constructor
+      · intros msg Hmsg Hclk
+        exact Hinv₂ msg Hmsg
+      constructor
+      · intros msg₁ Hmsg₁ Hmsg₁' msg₂ Hmsg₂ Hmsg₂'
+        exact Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂
+      constructor
+      · intros msg Hmsg Hmsg'
+        exact Hinv₄ msg Hmsg
+      constructor
+      · exact List.Nodup.filter (fun msg => decide (msg.timestamp ≤ clk)) Hinv₅
+      · have Hsort := (List.Sorted.filter (l:=List.map Message.sig mq.queue) (r:=(fun x1 x2 => x2 ≤ x1)) (f:=fun sig : MessageSig => decide (sig.2 ≤ clk)) Hinv₆)
+        have Heq : List.map Message.sig (List.filter (fun msg => msg.timestamp ≤ clk) mq.queue)
+                   = List.filter (fun sig => sig.2 ≤ clk) (List.map Message.sig mq.queue) := by
+          exact
+            List_filter_map mq.queue Message.sig (fun msg => decide (msg.timestamp ≤ clk))
+              (fun sig => decide (sig.2 ≤ clk)) (congrFun rfl)
+        simp [Heq, Hsort]
+
     strengthening mq clk grd := by sorry
+
     simulation mq clk grd := by sorry
   }
 
