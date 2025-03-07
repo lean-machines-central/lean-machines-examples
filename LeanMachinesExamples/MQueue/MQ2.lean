@@ -9,7 +9,7 @@ open Prioritized
 open Clocked
 
 structure MQ2 (α : Type 0) [instDec: DecidableEq α] (ctx : MQContext)
-    extends Clocked where
+    extends MClocked where
   queue : List (Message α)
 
 @[simp]
@@ -470,7 +470,6 @@ by
   exact List.Sublist.nodup Hsub Hns
 
 
-
 def MQ2.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Unit (α × Prio) :=
   newFRNDEvent MQ1.Dequeue.toOrdinaryNDEvent {
     lift_in := id
@@ -603,6 +602,54 @@ by
     rw [Hct]
     exact maxElemEx mq Hne
 
+@[simp]
+def List_Submset (xs ys : List α) := Multiset.ofList xs ≤ Multiset.ofList ys
+
+theorem List_MSet_subList (xs ys : List α):
+  xs.Sublist ys → List_Submset xs ys :=
+by
+  intro Hsubl
+  induction xs
+  case nil =>
+    simp [List_Submset]
+    apply Multiset.zero_le
+  case cons x xs Hind =>
+    simp at *
+    exact List.Sublist.subperm Hsubl
+
+theorem List_subSet_subMSet (xs ys : List α):
+  List_Submset xs ys
+  → List.Subset xs ys :=
+by
+  induction xs
+  case nil =>
+    intros Hm
+    simp at Hm
+    cases ys
+    case nil =>
+      exact fun ⦃a⦄ a => a
+    case cons y ys =>
+      simp [List.Subset]
+  case cons x xs Hind =>
+    simp [List.Subset] at *
+    simp [List.Subperm] at *
+    intros zs Hzs₁ Hzs₂
+    have H₁: x ∈ zs := by
+      rw [@List.perm_comm] at Hzs₁
+      have H₁ : x ∈ x :: xs := by exact List.mem_cons_self x xs
+      exact (List.Perm.mem_iff Hzs₁).mp H₁
+    constructor
+    case left => exact List.Sublist.mem H₁ Hzs₂
+    case right =>
+      intros y Hy
+      have Hx : x ∈ ys := by exact List.Sublist.mem H₁ Hzs₂
+      by_cases x = y
+      case pos Heq =>
+        rw [Heq] at Hx
+        exact Hx
+      case neg Hneq =>
+        sorry
+
 def MQ2.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Unit (Finset (Message α)) :=
   newFRNDEvent MQ1.Discard.toOrdinaryNDEvent {
     lift_in := id
@@ -614,7 +661,7 @@ def MQ2.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
                 ∧  (∃ ms : Finset (Message α),
                      ms ⊆ mq.messages ∧ ms ≠ ∅
                      ∧ mq'.messages = mq.messages \ ms
-                     ∧ mq'.queue.Sublist mq.queue
+                     ∧ List_Submset mq'.queue mq.queue
                      ∧ ∀ msg₁ ∈ ms, ∀ msg₂ ∈ mq'.messages, msg₁.prio ≤ msg₂.prio)
 
     safety := fun mq _ => by
@@ -625,6 +672,7 @@ def MQ2.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
         intros msg Hmsg
         have Hin': msg ∈ mq'.messages := by
           exact in_queue_in_messages mq' msg Hmsg
+        apply?
         exact List.Sublist.mem Hmsg Hsub
 
       have Hsub': mq'.queue ⊆ mq.queue := by

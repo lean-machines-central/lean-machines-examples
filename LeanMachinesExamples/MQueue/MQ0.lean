@@ -30,7 +30,7 @@ instance [instDec: DecidableEq α] (m₁ m₂ : @Message0 α instDec): Decidable
 
 @[ext]
 structure MQ0 (α : Type 0) [instDec: DecidableEq α] (ctx : BoundedCtx)
-    extends Clocked where
+    extends MClocked where
   messages : Finset (Message0 (instDec:=instDec))
 
 instance [instDec: DecidableEq α]: Machine BoundedCtx (MQ0 α (instDec:=instDec) ctx) where

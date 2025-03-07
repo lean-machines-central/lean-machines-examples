@@ -1127,20 +1127,20 @@ def MQ3.Discard [DecidableEq α] : OrdinaryRDetEvent (MQ2 α ctx) (MQ3 α ctx) C
       simp [Machine.invariant, MQ2.Discard, Refinement.refine]
       intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hgrd₁ msg Hmsg₁ Hmsg₂ am Ham₁ Ham₂
       exists { clock := mq.clock
-               queue := mq.queue.filter (fun msg => msg.timestamp < clk) }
+               queue := mq.queue.filter (fun msg => msg.timestamp ≥ clk) }
       simp [Ham₁, Ham₂]
+      let lms := am.queue.filter (fun x => x.timestamp < clk)
+      exists lms.toFinset
       constructor
       case left =>
-        let lms := am.queue.filter (fun x => x.timestamp < clk)
-        exists lms.toFinset
+        refine Finset.subset_iff.mpr ?_
+        intros msg' Hmsg'
+        refine List.mem_toFinset.mpr ?_
+        have Hmsg'' : msg' ∈ lms := by
+          exact List.mem_dedup.mp Hmsg'
+        exact List.mem_of_mem_filter Hmsg''
+      case right =>
         simp
-        constructor
-        · refine Finset.subset_iff.mpr ?_
-          intros msg' Hmsg'
-          refine List.mem_toFinset.mpr ?_
-          have Hmsg'' : msg' ∈ lms := by
-            exact List.mem_dedup.mp Hmsg'
-          exact List.mem_of_mem_filter Hmsg''
         constructor
         · have Hex: msg ∈ lms := by
             refine List.mem_filter.mpr ?_
@@ -1148,12 +1148,41 @@ def MQ3.Discard [DecidableEq α] : OrdinaryRDetEvent (MQ2 α ctx) (MQ3 α ctx) C
             exact List_Perm_in mq.queue am.queue Ham₁ msg Hmsg₁
           exact List.ne_nil_of_mem Hex
         constructor
-        · sorry  -- is this case ok ?
+        · refine Finset.ext_iff.mpr ?_
+          intro msg'
+          constructor
+          · simp
+            intros Hmsg'₁ Hmsg'₂
+            constructor
+            · exact List_Perm_in mq.queue am.queue Ham₁ msg' Hmsg'₁
+            · intro Hcontra
+              have Hmsg'₃ : msg' ∈ am.queue := by
+                exact List_Perm_in mq.queue am.queue Ham₁ msg' Hmsg'₁
+              have Hmsg'₄ : msg'.timestamp < clk := by
+                have Hfil := List.of_mem_filter Hcontra
+                simp at Hfil
+                exact Hfil
+              by_cases msg'.timestamp = clk
+              case pos Hpos =>
+                simp [Hpos] at Hmsg'₄
+              case neg Hneg =>
+                have Hinf: clk < msg'.timestamp := by
+                  exact lt_of_le_of_ne Hmsg'₂ fun a => Hneg (id (Eq.symm a))
+                apply Clock_not_lt_lt msg'.timestamp clk
+                constructor
+                · exact Hmsg'₄
+                · exact Hinf
+          · intro Hmsg'
+            simp at Hmsg'
+            obtain ⟨Hmsg'₁, Hmsg'₂⟩ := Hmsg'
+            simp
+            constructor
+            · exact List_Perm_in am.queue mq.queue (id (List.Perm.symm Ham₁)) msg' Hmsg'₁
+            · simp [lms] at Hmsg'₂
+              exact Hmsg'₂ Hmsg'₁
         constructor
-        · sorry -- and this one ?
-        · sorry -- one more
-      case right =>
-        sorry -- this one is not good I guess
+        · sorry -- is this true ?
+        · sorry -- probably easy
 
 
   }

@@ -31,7 +31,7 @@ instance [instDec: DecidableEq α] (m₁ m₂ : @Message α instDec): Decidable 
 
 @[ext]
 structure MQ1 (α : Type 0) [instDec: DecidableEq α] (ctx : MQContext)
-    extends Clocked where
+    extends MClocked where
   messages : Finset (Message α)
 
 -- We axiomatize the fact that messages in MQ1 are forming
@@ -636,7 +636,7 @@ def MQ1.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (M
       have Hne : mq.messages.Nonempty := by exact Finset.nonempty_iff_ne_empty.mpr Hgrd
       obtain ⟨msg, ⟨Hmsg, Hprio⟩⟩ := MQ1.maxElemEx mq Hne
       exists msg.payload ; exists msg.prio
-      exists { toClocked := mq.toClocked, messages := mq.messages \ {msg} }
+      exists { toMClocked := mq.toMClocked, messages := mq.messages \ {msg} }
       exists msg
       simp [*]
       intros msg' Hmsg' Hinj

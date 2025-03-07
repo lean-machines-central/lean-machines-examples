@@ -9,7 +9,7 @@ open Clocked
 open Prioritized
 
 structure MQ4 (α : Type 0) [instDec: DecidableEq α] (ctx : MQContext)
-  extends Clocked where
+  extends MClocked where
   queue : Array (Message α)
 
 def MQ4.lift [DecidableEq α] (mq : MQ4 α ctx) : MQ3 α ctx := {
