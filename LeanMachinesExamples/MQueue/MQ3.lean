@@ -1181,8 +1181,29 @@ def MQ3.Discard [DecidableEq α] : OrdinaryRDetEvent (MQ2 α ctx) (MQ3 α ctx) C
             · simp [lms] at Hmsg'₂
               exact Hmsg'₂ Hmsg'₁
         constructor
-        · sorry -- is this true ?
-        · sorry -- probably easy
+        · have Hsubp : mq.queue.Subperm am.queue := by exact List.Perm.subperm Ham₁
+          have Hsubf := List.Subperm.filter (fun x => decide (clk ≤ x.timestamp)) Hsubp
+          apply List.Subperm.trans (l₂:=(List.filter (fun x => decide (clk ≤ x.timestamp)) am.queue))
+          · exact Hsubf
+          · apply List.Sublist.subperm
+            · exact List.filter_sublist am.queue
+
+        · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hmsg₂'
+          by_cases msg₁.prio ≤ msg₂.prio
+          case pos Hpos =>
+            assumption
+          case neg Hneg =>
+            -- we have to find a countradiction
+            have H₁: msg₁ ∈ mq.queue := by
+              have H₁' : msg₁ ∈ am.queue := by
+                exact List.mem_of_mem_filter Hmsg₁
+              exact List_Perm_in am.queue mq.queue (id (List.Perm.symm Ham₁)) msg₁ H₁'
+            -- msg₁.timestamp < clk   because it is in lms
+            -- clk ≤ msg₂.timestamp
+            -- hence msg₁.timestamp < msg₂.timestamp
+
+            sorry
+
 
 
   }
