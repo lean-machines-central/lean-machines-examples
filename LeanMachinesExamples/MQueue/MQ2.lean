@@ -617,6 +617,14 @@ by
     simp at *
     exact List.Sublist.subperm Hsubl
 
+theorem List_Perm_in_left (xs ys : List α) (x : α):
+  xs.Perm ys
+  → x ∈ ys
+  → x ∈ xs :=
+by
+  intros H₁ H₂
+  exact (List.Perm.mem_iff (id (List.Perm.symm H₁))).mp H₂
+
 theorem List_subSet_subMSet (xs ys : List α):
   List_Submset xs ys
   → List.Subset xs ys :=
@@ -648,7 +656,15 @@ by
         rw [Heq] at Hx
         exact Hx
       case neg Hneq =>
-        sorry
+        by_cases y ∈ zs
+        case pos Hpos =>
+          exact List.Sublist.mem Hpos Hzs₂
+        case neg Hneg =>
+          have H₁ : y ∈ x :: xs := by
+            exact List.mem_cons_of_mem x Hy
+          have H₂ : y ∈ zs := by
+            exact List_Perm_in_left zs (x :: xs) y Hzs₁ H₁
+          contradiction
 
 def MQ2.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Unit (Finset (Message α)) :=
   newFRNDEvent MQ1.Discard.toOrdinaryNDEvent {
