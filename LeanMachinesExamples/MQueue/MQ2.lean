@@ -666,6 +666,30 @@ by
             exact List_Perm_in_left zs (x :: xs) y Hzs₁ H₁
           contradiction
 
+
+-- Question: is it possible to use another argument
+-- than the count of elements ?
+-- (corollary : is [DecidableEq α] necessary ?)
+theorem List_Subperm_nodup [DecidableEq α] (xs ys : List α):
+  xs.Nodup → ys.Subperm xs
+  → ys.Nodup :=
+by
+  intros Hnx Hsub
+  have Hones' : ∀ x, xs.count x ≤ 1 := by
+    apply List.nodup_iff_count_le_one (l:=xs).1
+    exact Hnx
+
+  have Hinf := List.Subperm.count_le (l₁:=ys) (l₂:=xs) Hsub
+  have Hinf' := List.nodup_iff_count_le_one (l:=ys).2
+  apply Hinf'
+  intro y
+  have Hy₁ : List.count y xs ≤ 1 := by
+    exact Hones' y
+  have Hy₂ : List.count y ys ≤ List.count y xs := by
+    exact Hinf y
+  apply le_trans (b:=List.count y xs) <;> assumption
+
+
 def MQ2.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Unit (Finset (Message α)) :=
   newFRNDEvent MQ1.Discard.toOrdinaryNDEvent {
     lift_in := id
@@ -684,48 +708,26 @@ def MQ2.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
       simp [Machine.invariant]
       intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hgrd mq' Hclk ms Hms₁ Hms₂ Hmq' Hsub Hprio
 
-      have Hin: ∀ msg ∈ mq'.queue, msg ∈ mq.queue := by
-        intros msg Hmsg
-        have Hin': msg ∈ mq'.messages := by
-          exact in_queue_in_messages mq' msg Hmsg
-        apply?
-        exact List.Sublist.mem Hmsg Hsub
-
-      have Hsub': mq'.queue ⊆ mq.queue := by
-        exact Hin
-
-      have Hnd: mq'.queue.Nodup := by
-        exact List_sub_Nodup mq'.queue mq.queue Hinv₅ Hsub
-
-      have Hlen: mq.queue.toFinset.card = mq.queue.length := by
-        exact List.toFinset_card_of_nodup Hinv₅
-
-      have Hlen': mq'.queue.toFinset.card = mq'.queue.length := by
-        exact List.toFinset_card_of_nodup Hnd
-
-      have Hcard: mq'.queue.toFinset.card ≤ mq.queue.toFinset.card := by
-        simp [Hmq']
-        exact Finset_card_sdiff_le mq.queue.toFinset ms
-
       constructor
-      · rw [←Hlen']
-
-        have Hinv₁' : mq.queue.toFinset.card ≤ ctx.maxCount := by
-          rw [←Hlen] at Hinv₁
-          exact Hinv₁
-        exact Nat.le_trans Hcard Hinv₁'
-
+      · have Hlen: mq'.queue.length ≤ mq.queue.length := by
+          exact List.Subperm.length_le Hsub
+        apply le_trans (b:=mq.queue.length) <;> assumption
       constructor
-      · intros msg Hmsg
+      · intros msg Hmsg₁
+        have Hmsg₂: msg ∈ mq.queue := by
+          apply List.Subperm.subset Hsub Hmsg₁
         rw [Hclk]
-        exact Hinv₂ msg (Hin msg Hmsg)
+        exact Hinv₂ msg Hmsg₂
       constructor
       · intros msg₁ Hmsg₁ msg₂ Hmsg₂
-        exact Hinv₃ msg₁ (Hin msg₁ Hmsg₁) msg₂ (Hin msg₂ Hmsg₂)
+        apply Hinv₃
+        · apply List.Subperm.subset Hsub Hmsg₁
+        · apply List.Subperm.subset Hsub Hmsg₂
       constructor
       · intros msg Hmsg
-        exact Hinv₄ msg (Hin msg Hmsg)
-      · exact Hnd
+        apply Hinv₄
+        · apply List.Subperm.subset Hsub Hmsg
+      · exact List_Subperm_nodup mq.queue mq'.queue Hinv₅ Hsub
 
     feasibility := fun mq _ => by
       simp [Machine.invariant]
@@ -743,7 +745,7 @@ def MQ2.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
       constructor
       · exact List_erase_Finset_Nodup mq.queue msg Hinv₅
       constructor
-      · exact List.erase_sublist msg mq.queue
+      · exact List.erase_subperm msg mq.queue
       · intros msg₂ Hmsg₂
         have Hmsg₂' : msg₂ ∈ mq.queue := by
           exact List.mem_of_mem_erase Hmsg₂
