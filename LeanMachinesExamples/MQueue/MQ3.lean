@@ -1078,40 +1078,45 @@ def List_filter_pred (xs : List α) (pred? : α → Bool):
   ∀ x ∈ xs.filter pred?, pred? x = true :=
 by exact fun x a => List.of_mem_filter a
 
-def MQ3.Discard [DecidableEq α] : OrdinaryRDetEvent (MQ2 α ctx) (MQ3 α ctx) Clock (List (Message α)) Unit (Finset (Message α)) :=
+def MQ3.Discard [DecidableEq α] : OrdinaryRDetEvent (MQ2 α ctx) (MQ3 α ctx) (Prio × Clock) (List (Message α)) Unit (Finset (Message α)) :=
   newRDetEvent MQ2.Discard.toOrdinaryNDEvent {
-    lift_in clk := ()
+    lift_in x := ()
     lift_out msgs := msgs.toFinset
-    guard mq clk := mq.queue.length > 0 ∧ ∃ msg ∈ mq.queue, msg.timestamp < clk
-    action mq clk grd :=
-      let mq' := { mq with queue := mq.queue.filter (fun msg => msg.timestamp ≥ clk), clock := mq.clock}
-      (mq.queue.filter (fun msg => msg.timestamp < clk), mq')
+    guard mq := fun (prio, clk) => mq.queue.length > 0 ∧ ∃ msg ∈ mq.queue, msg.prio = prio ∧ msg.timestamp < clk
+    action := fun mq (prio, clk) grd =>
+      let mq' := { mq with queue := mq.queue.filter (fun msg => msg.prio = prio ∧ msg.timestamp ≥ clk), clock := mq.clock}
+      (mq.queue.filter (fun msg => msg.prio ≠ prio ∨ msg.timestamp < clk), mq')
 
-    safety mq clk := by
+    safety mq := fun (prio, clk) => by
       simp [Machine.invariant]
-      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hgrd₁ msg Hmsg Hclk
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hgrd₁ msg Hmsg Hprio Hclk
       constructor
-      · have H: (List.filter (fun msg => decide (clk ≤ msg.timestamp)) mq.queue).length
+      · have H: (List.filter (fun msg => decide (msg.prio = prio ∧ clk ≤ msg.timestamp)) mq.queue).length
                 ≤ mq.queue.length := by
-          exact List.length_filter_le (fun msg => decide (clk ≤ msg.timestamp)) mq.queue
-        exact Nat.le_trans H Hinv₁
+          exact List.length_filter_le (fun msg => decide (msg.prio = prio ∧ clk ≤ msg.timestamp)) mq.queue
+        apply le_trans (b:=mq.queue.length)
+        · exact
+          List.length_filter_le
+            (fun msg => decide (msg.prio = prio) && decide (clk ≤ msg.timestamp)) mq.queue
+        · exact Hinv₁
       constructor
-      · intros msg Hmsg Hclk
+      · intros msg Hmsg Hclk' Hprio
         exact Hinv₂ msg Hmsg
       constructor
-      · intros msg₁ Hmsg₁ Hmsg₁' msg₂ Hmsg₂ Hmsg₂'
+      · intros msg₁ Hmsg₁ Hmsg₁' Hmsg₁'' msg₂ Hmsg₂ Hmsg₂' Hmsg₂''
         exact Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂
       constructor
-      · intros msg Hmsg Hmsg'
+      · intros msg Hmsg Hmsg' Hmsg''
         exact Hinv₄ msg Hmsg
       constructor
-      · exact List.Nodup.filter (fun msg => decide (clk ≤ msg.timestamp)) Hinv₅
-      · have Hsort := (List.Sorted.filter (l:=List.map Message.sig mq.queue) (r:=(fun x1 x2 => x2 ≤ x1)) (f:=fun sig : MessageSig => decide (clk ≤ sig.2)) Hinv₆)
-        have Heq : List.map Message.sig (List.filter (fun msg => clk ≤ msg.timestamp) mq.queue)
-                   = List.filter (fun sig => clk ≤ sig.2) (List.map Message.sig mq.queue) := by
+      · exact List.Nodup.filter (fun msg => decide (msg.prio = prio) && decide (clk ≤ msg.timestamp)) Hinv₅
+      · have Hsort := (List.Sorted.filter (l:=List.map Message.sig mq.queue) (r:=(fun x1 x2 => x2 ≤ x1)) (f:=fun sig : MessageSig => decide (sig.1 = prio) && decide (clk ≤ sig.2)) Hinv₆)
+        have Heq : List.map Message.sig (List.filter (fun msg => decide (msg.prio = prio) && decide (clk ≤ msg.timestamp)) mq.queue)
+                   = List.filter (fun sig => decide (sig.1 = prio) && decide (clk ≤ sig.2)) (List.map Message.sig mq.queue) := by
           exact
-            List_filter_map mq.queue Message.sig (fun msg => decide (clk ≤ msg.timestamp))
-              (fun sig => decide (clk ≤ sig.2)) (congrFun rfl)
+            List_filter_map mq.queue Message.sig
+              (fun msg => decide (msg.prio = prio) && decide (clk ≤ msg.timestamp))
+              (fun sig => decide (sig.1 = prio) && decide (clk ≤ sig.2)) (congrFun rfl)
         simp [Heq, Hsort]
 
     strengthening mq clk := by
