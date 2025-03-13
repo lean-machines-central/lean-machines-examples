@@ -1078,45 +1078,42 @@ def List_filter_pred (xs : List α) (pred? : α → Bool):
   ∀ x ∈ xs.filter pred?, pred? x = true :=
 by exact fun x a => List.of_mem_filter a
 
-def MQ3.Discard [DecidableEq α] : OrdinaryRDetEvent (MQ2 α ctx) (MQ3 α ctx) (Prio × Clock) (List (Message α)) Unit (Finset (Message α)) :=
+def MQ3.Discard [DecidableEq α] : OrdinaryRDetEvent (MQ2 α ctx) (MQ3 α ctx) Prio (List (Message α)) Unit (Finset (Message α)) :=
   newRDetEvent MQ2.Discard.toOrdinaryNDEvent {
     lift_in x := ()
     lift_out msgs := msgs.toFinset
-    guard mq := fun (prio, clk) => mq.queue.length > 0 ∧ ∃ msg ∈ mq.queue, msg.prio = prio ∧ msg.timestamp < clk
-    action := fun mq (prio, clk) grd =>
-      let mq' := { mq with queue := mq.queue.filter (fun msg => msg.prio = prio ∧ msg.timestamp ≥ clk), clock := mq.clock}
-      (mq.queue.filter (fun msg => msg.prio ≠ prio ∨ msg.timestamp < clk), mq')
+    guard mq prio := mq.queue.length > 0 ∧ ∃ msg ∈ mq.queue, msg.prio < prio
+    action := fun mq prio grd =>
+      let mq' := { mq with queue := mq.queue.filter (fun msg => msg.prio ≥ prio), clock := mq.clock}
+      (mq.queue.filter (fun msg => msg.prio < prio), mq')
 
-    safety mq := fun (prio, clk) => by
+    safety mq := fun prio => by
       simp [Machine.invariant]
-      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hgrd₁ msg Hmsg Hprio Hclk
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hgrd₁ msg Hmsg Hprio
       constructor
-      · have H: (List.filter (fun msg => decide (msg.prio = prio ∧ clk ≤ msg.timestamp)) mq.queue).length
+      · have H: (List.filter (fun msg => decide (prio ≤ msg.prio)) mq.queue).length
                 ≤ mq.queue.length := by
-          exact List.length_filter_le (fun msg => decide (msg.prio = prio ∧ clk ≤ msg.timestamp)) mq.queue
+          exact List.length_filter_le (fun msg => decide (prio ≤ msg.prio)) mq.queue
         apply le_trans (b:=mq.queue.length)
-        · exact
-          List.length_filter_le
-            (fun msg => decide (msg.prio = prio) && decide (clk ≤ msg.timestamp)) mq.queue
+        · exact H
         · exact Hinv₁
       constructor
-      · intros msg Hmsg Hclk' Hprio
+      · intros msg Hmsg Hprio
         exact Hinv₂ msg Hmsg
       constructor
-      · intros msg₁ Hmsg₁ Hmsg₁' Hmsg₁'' msg₂ Hmsg₂ Hmsg₂' Hmsg₂''
+      · intros msg₁ Hmsg₁ Hmsg₁'  msg₂ Hmsg₂ Hmsg₂'
         exact Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂
       constructor
-      · intros msg Hmsg Hmsg' Hmsg''
+      · intros msg Hmsg Hmsg'
         exact Hinv₄ msg Hmsg
       constructor
-      · exact List.Nodup.filter (fun msg => decide (msg.prio = prio) && decide (clk ≤ msg.timestamp)) Hinv₅
-      · have Hsort := (List.Sorted.filter (l:=List.map Message.sig mq.queue) (r:=(fun x1 x2 => x2 ≤ x1)) (f:=fun sig : MessageSig => decide (sig.1 = prio) && decide (clk ≤ sig.2)) Hinv₆)
-        have Heq : List.map Message.sig (List.filter (fun msg => decide (msg.prio = prio) && decide (clk ≤ msg.timestamp)) mq.queue)
-                   = List.filter (fun sig => decide (sig.1 = prio) && decide (clk ≤ sig.2)) (List.map Message.sig mq.queue) := by
+      · exact List.Nodup.filter (fun msg => decide (prio ≤ msg.prio)) Hinv₅
+      · have Hsort := (List.Sorted.filter (l:=List.map Message.sig mq.queue) (r:=(fun x1 x2 => x2 ≤ x1)) (f:=fun sig : MessageSig => decide (prio ≤ sig.1)) Hinv₆)
+        have Heq : List.map Message.sig (List.filter (fun msg => decide (prio ≤ msg.prio)) mq.queue)
+                   = List.filter (fun sig => decide (prio ≤ sig.1)) (List.map Message.sig mq.queue) := by
           exact
-            List_filter_map mq.queue Message.sig
-              (fun msg => decide (msg.prio = prio) && decide (clk ≤ msg.timestamp))
-              (fun sig => decide (sig.1 = prio) && decide (clk ≤ sig.2)) (congrFun rfl)
+            List_filter_map mq.queue Message.sig (fun msg => decide (prio ≤ msg.prio))
+              (fun sig => decide (prio ≤ sig.1)) (congrFun rfl)
         simp [Heq, Hsort]
 
     strengthening mq clk := by
@@ -1128,13 +1125,13 @@ def MQ3.Discard [DecidableEq α] : OrdinaryRDetEvent (MQ2 α ctx) (MQ3 α ctx) (
         simp [←Hlen, Hgrd₁]
       exact List.ne_nil_of_length_pos H
 
-    simulation mq clk := by
+    simulation mq  := fun prio => by
       simp [Machine.invariant, MQ2.Discard, Refinement.refine]
       intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hinv₆ Hgrd₁ msg Hmsg₁ Hmsg₂ am Ham₁ Ham₂
       exists { clock := mq.clock
-               queue := mq.queue.filter (fun msg => msg.timestamp ≥ clk) }
+               queue := mq.queue.filter (fun msg => msg.prio ≥ prio) }
       simp [Ham₁, Ham₂]
-      let lms := am.queue.filter (fun x => x.timestamp < clk)
+      let lms := am.queue.filter (fun x => x.prio < prio)
       exists lms.toFinset
       constructor
       case left =>
@@ -1149,8 +1146,9 @@ def MQ3.Discard [DecidableEq α] : OrdinaryRDetEvent (MQ2 α ctx) (MQ3 α ctx) (
         constructor
         · have Hex: msg ∈ lms := by
             refine List.mem_filter.mpr ?_
-            simp [Hmsg₂]
-            exact List_Perm_in mq.queue am.queue Ham₁ msg Hmsg₁
+            constructor
+            · exact List_Perm_in mq.queue am.queue Ham₁ msg Hmsg₁
+            · simp [Hmsg₂]
           exact List.ne_nil_of_mem Hex
         constructor
         · refine Finset.ext_iff.mpr ?_
@@ -1160,23 +1158,10 @@ def MQ3.Discard [DecidableEq α] : OrdinaryRDetEvent (MQ2 α ctx) (MQ3 α ctx) (
             intros Hmsg'₁ Hmsg'₂
             constructor
             · exact List_Perm_in mq.queue am.queue Ham₁ msg' Hmsg'₁
-            · intro Hcontra
-              have Hmsg'₃ : msg' ∈ am.queue := by
-                exact List_Perm_in mq.queue am.queue Ham₁ msg' Hmsg'₁
-              have Hmsg'₄ : msg'.timestamp < clk := by
-                have Hfil := List.of_mem_filter Hcontra
-                simp at Hfil
-                exact Hfil
-              by_cases msg'.timestamp = clk
-              case pos Hpos =>
-                simp [Hpos] at Hmsg'₄
-              case neg Hneg =>
-                have Hinf: clk < msg'.timestamp := by
-                  exact lt_of_le_of_ne Hmsg'₂ fun a => Hneg (id (Eq.symm a))
-                apply Clock_not_lt_lt msg'.timestamp clk
-                constructor
-                · exact Hmsg'₄
-                · exact Hinf
+            · simp [lms]
+              intro Hmsg'₃
+              exact Hmsg'₂
+
           · intro Hmsg'
             simp at Hmsg'
             obtain ⟨Hmsg'₁, Hmsg'₂⟩ := Hmsg'
@@ -1184,32 +1169,22 @@ def MQ3.Discard [DecidableEq α] : OrdinaryRDetEvent (MQ2 α ctx) (MQ3 α ctx) (
             constructor
             · exact List_Perm_in am.queue mq.queue (id (List.Perm.symm Ham₁)) msg' Hmsg'₁
             · simp [lms] at Hmsg'₂
-              exact Hmsg'₂ Hmsg'₁
+              have Hmsg'₂ := Hmsg'₂ Hmsg'₁
+              assumption
         constructor
         · have Hsubp : mq.queue.Subperm am.queue := by exact List.Perm.subperm Ham₁
-          have Hsubf := List.Subperm.filter (fun x => decide (clk ≤ x.timestamp)) Hsubp
-          apply List.Subperm.trans (l₂:=(List.filter (fun x => decide (clk ≤ x.timestamp)) am.queue))
+          have Hsubf := List.Subperm.filter (fun x => decide (prio ≤ x.prio)) Hsubp
+          apply List.Subperm.trans (l₂:=(List.filter (fun x => decide (prio ≤ x.prio)) am.queue))
           · exact Hsubf
           · apply List.Sublist.subperm
             · exact List.filter_sublist am.queue
 
         · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hmsg₂'
-          by_cases msg₁.prio ≤ msg₂.prio
-          case pos Hpos =>
-            assumption
-          case neg Hneg =>
-            -- we have to find a countradiction
-            have H₁: msg₁ ∈ mq.queue := by
-              have H₁' : msg₁ ∈ am.queue := by
-                exact List.mem_of_mem_filter Hmsg₁
-              exact List_Perm_in am.queue mq.queue (id (List.Perm.symm Ham₁)) msg₁ H₁'
-            -- msg₁.timestamp < clk   because it is in lms
-            -- clk ≤ msg₂.timestamp
-            -- hence msg₁.timestamp < msg₂.timestamp
-
-            sorry
-
-
+          simp [lms] at Hmsg₁
+          obtain ⟨H₁, H₂⟩ := Hmsg₁
+          have H₁: msg₁.prio ≤ prio := by
+              exact le_of_lt H₂
+          exact Preorder.le_trans msg₁.prio prio msg₂.prio H₁ Hmsg₂'
 
   }
 
