@@ -9,7 +9,7 @@ open Prioritized
 open Clocked
 
 structure MQ2 (α : Type 0) [instDec: DecidableEq α] (ctx : MQContext)
-    extends Clocked where
+    extends MClocked where
   queue : List (Message α)
 
 @[simp]
@@ -39,7 +39,7 @@ instance [instDec: DecidableEq α]: Machine MQContext (MQ2 α (instDec:=instDec)
   context := ctx
   invariant mq := mq.queue.length ≤ ctx.maxCount
                   ∧ (∀ msg ∈ mq.queue, msg.timestamp < mq.clock)
-                  ∧ (∀ msg₁ ∈ mq.queue, ∀ msg₂ ∈ mq.queue, msg₁.timestamp = msg₂.timestamp → msg₁ = msg₂)
+                  ∧ (∀ msg₁ ∈ mq.queue, ∀ msg₂ ∈ mq.queue, msg₁.timestamp = msg₂.timestamp ↔ msg₁ = msg₂)
                   ∧ (∀ msg ∈ mq.queue, ctx.minPrio ≤ msg.prio ∧ msg.prio ≤ ctx.maxPrio)
                   ∧ mq.queue.Nodup
   default := { queue := [], clock := 0}
@@ -139,8 +139,8 @@ instance [instDec: DecidableEq α] : FRefinement (MQ1 α ctx) (MQ2 α ctx) where
     constructor
     · intros msg Hmsg ; exact Hinv₂ msg Hmsg
     constructor
-    · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
-      exact Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
+    · intros msg₁ Hmsg₁ msg₂ Hmsg₂
+      exact Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂
     · intros msg Hmsg
       exact Hinv₄ msg Hmsg
 
@@ -217,19 +217,26 @@ def MQ2.Enqueue [DecidableEq α]: OrdinaryREvent (MQ1 α ctx) (MQ2 α ctx) (α �
         exact Nat.lt_succ_of_lt (Hinv₂ msg Hmsg)
       constructor
       constructor
-      · intros msg Hmsg Hts
-        have Hclk' := Hclk msg.payload msg.prio
-        simp [Hts] at Hclk'
-        contradiction
       · intros msg Hmsg
         constructor
-        · intro Hts
-          have Hclk' := Hclk msg.payload msg.prio
-          simp [←Hts] at Hclk'
-          have Hmsg' : msg ∈ mq.messages := by exact in_queue_in_messages mq msg Hmsg
-          contradiction
-        · intros msg' Hmsg' Hts
-          exact Hinv₃ msg Hmsg msg' Hmsg' Hts
+        · intro Hclk
+          rw [Hclk]
+          exact
+            (Message.timestamp_ax { payload := x, timestamp := msg.timestamp, prio := px } msg).mpr
+              rfl
+        · intro Hmsg'
+          simp [←Hmsg']
+      · intros msg Hmsg
+        constructor
+        · constructor
+          · intro Hclk
+            exact
+              (Message.timestamp_ax msg { payload := x, timestamp := mq.clock, prio := px }).mpr
+                Hclk
+          · intro Hmsg'
+            simp [Hmsg']
+        · intros msg' Hmsg'
+          exact Hinv₃ msg Hmsg msg' Hmsg'
       constructor
       constructor
       · exact ⟨Hgrd₂, Hgrd₃⟩
@@ -463,7 +470,6 @@ by
   exact List.Sublist.nodup Hsub Hns
 
 
-
 def MQ2.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Unit (α × Prio) :=
   newFRNDEvent MQ1.Dequeue.toOrdinaryNDEvent {
     lift_in := id
@@ -507,14 +513,10 @@ def MQ2.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
         rw [Hclk]
         exact Hinv₂ msg' Hmsg''
       constructor
-      · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
-        have Hmsg₁' : msg₁ ≠ msg := by
-          exact HmsgLemma₂ msg₁ Hmsg₁
-        have Hmsg₂' : msg₂ ≠ msg := by
-          exact HmsgLemma₂ msg₂ Hmsg₂
-        have Hmsg₁'' : msg₁ ∈ mq.queue := by exact HmsgLemma₃ msg₁ Hmsg₁ (HmsgLemma₂ msg₁ Hmsg₁)
-        have Hmsg₂'' : msg₂ ∈ mq.queue := by exact HmsgLemma₃ msg₂ Hmsg₂ (HmsgLemma₂ msg₂ Hmsg₂)
-        exact Hinv₃ msg₁ Hmsg₁'' msg₂ Hmsg₂'' Hts
+      · intros msg₁ Hmsg₁ msg₂ Hmsg₂
+        apply Hinv₃
+        · exact HmsgLemma₃ msg₁ Hmsg₁ (HmsgLemma₂ msg₁ Hmsg₁)
+        · exact HmsgLemma₃ msg₂ Hmsg₂ (HmsgLemma₂ msg₂ Hmsg₂)
       constructor
       · intros msg' Hmsg'
         by_cases msg' ∈ mq.queue
@@ -600,6 +602,94 @@ by
     rw [Hct]
     exact maxElemEx mq Hne
 
+@[simp]
+def List_Submset (xs ys : List α) := Multiset.ofList xs ≤ Multiset.ofList ys
+
+theorem List_MSet_subList (xs ys : List α):
+  xs.Sublist ys → List_Submset xs ys :=
+by
+  intro Hsubl
+  induction xs
+  case nil =>
+    simp [List_Submset]
+    apply Multiset.zero_le
+  case cons x xs Hind =>
+    simp at *
+    exact List.Sublist.subperm Hsubl
+
+theorem List_Perm_in_left (xs ys : List α) (x : α):
+  xs.Perm ys
+  → x ∈ ys
+  → x ∈ xs :=
+by
+  intros H₁ H₂
+  exact (List.Perm.mem_iff (id (List.Perm.symm H₁))).mp H₂
+
+theorem List_subSet_subMSet (xs ys : List α):
+  List_Submset xs ys
+  → List.Subset xs ys :=
+by
+  induction xs
+  case nil =>
+    intros Hm
+    simp at Hm
+    cases ys
+    case nil =>
+      exact fun ⦃a⦄ a => a
+    case cons y ys =>
+      simp [List.Subset]
+  case cons x xs Hind =>
+    simp [List.Subset] at *
+    simp [List.Subperm] at *
+    intros zs Hzs₁ Hzs₂
+    have H₁: x ∈ zs := by
+      rw [@List.perm_comm] at Hzs₁
+      have H₁ : x ∈ x :: xs := by exact List.mem_cons_self x xs
+      exact (List.Perm.mem_iff Hzs₁).mp H₁
+    constructor
+    case left => exact List.Sublist.mem H₁ Hzs₂
+    case right =>
+      intros y Hy
+      have Hx : x ∈ ys := by exact List.Sublist.mem H₁ Hzs₂
+      by_cases x = y
+      case pos Heq =>
+        rw [Heq] at Hx
+        exact Hx
+      case neg Hneq =>
+        by_cases y ∈ zs
+        case pos Hpos =>
+          exact List.Sublist.mem Hpos Hzs₂
+        case neg Hneg =>
+          have H₁ : y ∈ x :: xs := by
+            exact List.mem_cons_of_mem x Hy
+          have H₂ : y ∈ zs := by
+            exact List_Perm_in_left zs (x :: xs) y Hzs₁ H₁
+          contradiction
+
+
+-- Question: is it possible to use another argument
+-- than the count of elements ?
+-- (corollary : is [DecidableEq α] necessary ?)
+theorem List_Subperm_nodup [DecidableEq α] (xs ys : List α):
+  xs.Nodup → ys.Subperm xs
+  → ys.Nodup :=
+by
+  intros Hnx Hsub
+  have Hones' : ∀ x, xs.count x ≤ 1 := by
+    apply List.nodup_iff_count_le_one (l:=xs).1
+    exact Hnx
+
+  have Hinf := List.Subperm.count_le (l₁:=ys) (l₂:=xs) Hsub
+  have Hinf' := List.nodup_iff_count_le_one (l:=ys).2
+  apply Hinf'
+  intro y
+  have Hy₁ : List.count y xs ≤ 1 := by
+    exact Hones' y
+  have Hy₂ : List.count y ys ≤ List.count y xs := by
+    exact Hinf y
+  apply le_trans (b:=List.count y xs) <;> assumption
+
+
 def MQ2.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Unit (Finset (Message α)) :=
   newFRNDEvent MQ1.Discard.toOrdinaryNDEvent {
     lift_in := id
@@ -611,54 +701,33 @@ def MQ2.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
                 ∧  (∃ ms : Finset (Message α),
                      ms ⊆ mq.messages ∧ ms ≠ ∅
                      ∧ mq'.messages = mq.messages \ ms
-                     ∧ mq'.queue.Sublist mq.queue
+                     ∧ List_Submset mq'.queue mq.queue
                      ∧ ∀ msg₁ ∈ ms, ∀ msg₂ ∈ mq'.messages, msg₁.prio ≤ msg₂.prio)
 
     safety := fun mq _ => by
       simp [Machine.invariant]
       intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hgrd mq' Hclk ms Hms₁ Hms₂ Hmq' Hsub Hprio
 
-      have Hin: ∀ msg ∈ mq'.queue, msg ∈ mq.queue := by
-        intros msg Hmsg
-        have Hin': msg ∈ mq'.messages := by
-          exact in_queue_in_messages mq' msg Hmsg
-        exact List.Sublist.mem Hmsg Hsub
-
-      have Hsub': mq'.queue ⊆ mq.queue := by
-        exact Hin
-
-      have Hnd: mq'.queue.Nodup := by
-        exact List_sub_Nodup mq'.queue mq.queue Hinv₅ Hsub
-
-      have Hlen: mq.queue.toFinset.card = mq.queue.length := by
-        exact List.toFinset_card_of_nodup Hinv₅
-
-      have Hlen': mq'.queue.toFinset.card = mq'.queue.length := by
-        exact List.toFinset_card_of_nodup Hnd
-
-      have Hcard: mq'.queue.toFinset.card ≤ mq.queue.toFinset.card := by
-        simp [Hmq']
-        exact Finset_card_sdiff_le mq.queue.toFinset ms
-
       constructor
-      · rw [←Hlen']
-
-        have Hinv₁' : mq.queue.toFinset.card ≤ ctx.maxCount := by
-          rw [←Hlen] at Hinv₁
-          exact Hinv₁
-        exact Nat.le_trans Hcard Hinv₁'
-
+      · have Hlen: mq'.queue.length ≤ mq.queue.length := by
+          exact List.Subperm.length_le Hsub
+        apply le_trans (b:=mq.queue.length) <;> assumption
       constructor
-      · intros msg Hmsg
+      · intros msg Hmsg₁
+        have Hmsg₂: msg ∈ mq.queue := by
+          apply List.Subperm.subset Hsub Hmsg₁
         rw [Hclk]
-        exact Hinv₂ msg (Hin msg Hmsg)
+        exact Hinv₂ msg Hmsg₂
       constructor
-      · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
-        exact Hinv₃ msg₁ (Hin msg₁ Hmsg₁) msg₂ (Hin msg₂ Hmsg₂) Hts
+      · intros msg₁ Hmsg₁ msg₂ Hmsg₂
+        apply Hinv₃
+        · apply List.Subperm.subset Hsub Hmsg₁
+        · apply List.Subperm.subset Hsub Hmsg₂
       constructor
       · intros msg Hmsg
-        exact Hinv₄ msg (Hin msg Hmsg)
-      · exact Hnd
+        apply Hinv₄
+        · apply List.Subperm.subset Hsub Hmsg
+      · exact List_Subperm_nodup mq.queue mq'.queue Hinv₅ Hsub
 
     feasibility := fun mq _ => by
       simp [Machine.invariant]
@@ -676,7 +745,7 @@ def MQ2.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
       constructor
       · exact List_erase_Finset_Nodup mq.queue msg Hinv₅
       constructor
-      · exact List.erase_sublist msg mq.queue
+      · exact List.erase_subperm msg mq.queue
       · intros msg₂ Hmsg₂
         have Hmsg₂' : msg₂ ∈ mq.queue := by
           exact List.mem_of_mem_erase Hmsg₂

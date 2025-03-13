@@ -123,23 +123,35 @@ instance: LinearOrder Clock where
       show Decidable (v₁ ≤ v₂)
       exact v₁.decLe v₂
 
+theorem Clock_not_lt_lt (ck₁ ck₂ : Clock):
+  ¬ (ck₁ < ck₂ ∧ ck₂ < ck₁) :=
+by
+  intro ⟨H₁,H₂⟩
+  have Hlt := not_lt_of_gt H₁
+  contradiction
+
+-- A clocked abstract machine
+-- This can be refined if a clock is needed in a concrete machine
+-- Note however that without generic instantiation or (yet better!)
+-- multi-refinement, the potential for reuse is rather limited
+
 structure EmptyCtx where
 
-structure Clocked where
+structure MClocked where
   clock : Clock
 
-instance: Machine EmptyCtx Clocked where
+instance: Machine EmptyCtx MClocked where
   context := {}
   invariant := fun _ => True
   default := { clock := 0 }
 
-def Init : InitEvent Clocked Unit Unit :=
+def Init : InitEvent MClocked Unit Unit :=
   newInitEvent'' {
     init _ := { clock := 0 }
     safety := fun _ => by simp [Machine.invariant]
   }
 
-def Tick : OrdinaryEvent Clocked Unit Unit :=
+def Tick : OrdinaryEvent MClocked Unit Unit :=
   newEvent'' {
     action m _ := { m with clock := m.clock + 1 }
     safety := fun m => by simp [Machine.invariant]
