@@ -126,7 +126,7 @@ instance: Min Prio where
 
 instance: LinearOrder Prio where
   le_total p₁ p₂ := by apply Nat.le_total
-  decidableLE := inferInstance --instDecidableLePrio
+  toDecidableLE := inferInstance --instDecidableLePrio
   min_def p₁ p₂ := by exact apply_ite Prio.mk (p₁.prio ≤ p₂.prio) p₁.prio p₂.prio
   max_def p₁ p₂  := by exact apply_ite Prio.mk (p₁.prio ≤ p₂.prio) p₂.prio p₁.prio
   compare_eq_compareOfLessAndEq p₁ p₂ := by

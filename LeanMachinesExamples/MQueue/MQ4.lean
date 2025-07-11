@@ -156,7 +156,7 @@ axiom Array_insertionSortMemConv {α : Type} (lt : α → α → Bool) (as : Arr
 theorem Array_push_toList (as : Array α) (x : α):
   (as.push x).toList = as.toList ++ [x] :=
 by
-  apply Array.push_toList
+  apply Array.toList_push
 
 theorem Array_push_Nodup (as : Array α) (x : α):
   as.toList.Nodup
@@ -164,7 +164,7 @@ theorem Array_push_Nodup (as : Array α) (x : α):
   → (as.push x).toList.Nodup :=
 by
   intros Has Hx
-  rw [@Array.push_toList]
+  rw [@Array.toList_push]
   rw [@List.nodup_middle]
   simp
   simp [Has, Hx]
@@ -207,7 +207,7 @@ def MQ4.Enqueue [DecidableEq α] [Preorder α]: OrdinaryREvent (MQ3 α ctx) (MQ4
       constructor
       · have Hpush: (mq.queue.push { payload := x, timestamp := mq.clock, prio := p }).size
                     = mq.queue.size + 1 := by
-          exact Array.size_push mq.queue { payload := x, timestamp := mq.clock, prio := p }
+          exact Array.size_push ({ payload := x, timestamp := mq.clock, prio := p } : Message α)
         rw [@Array_insertionSortSize]
         rw [Hpush]
         exact Hgrd₁
@@ -253,7 +253,9 @@ def MQ4.Enqueue [DecidableEq α] [Preorder α]: OrdinaryREvent (MQ3 α ctx) (MQ4
         intro Hcontra
         have Hinv₂' := Hinv₂ { payload := x, timestamp := mq.clock, prio := p } Hcontra
         simp at Hinv₂'
-      · sorry
+      ·
+
+        sorry
 
     strengthening := fun mq (x, p) => by
       simp [MQ3.Enqueue, FRefinement.lift, MQ4.lift, MQ3.enqueue_guard]

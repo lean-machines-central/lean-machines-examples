@@ -167,8 +167,7 @@ def B1.Batch : ConvergentRDetEvent Nat (B0 ctx) (B1 ctx α) (List α) Unit Unit 
         linarith
     simulation := fun b1 xs => by
       simp [Machine.invariant, Refinement.refine, FRefinement.lift, B0.Batch]
-      intros _ Hgrd₁ Hgrd₂
-      exists xs.length
+
     variant := fun b1 => ctx.maxSize - b1.data.length
     convergence := fun b1 xs => by
       simp [Machine.invariant]

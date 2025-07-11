@@ -113,8 +113,8 @@ instance: LinearOrder Clock where
       show (v₁ ≤ v₂) ∨ (v₂ ≤ v₁)
       exact Nat.le_total v₁ v₂
 
-  decidableLE := by
-    simp [DecidableRel]
+  toDecidableLE := by
+    -- simp [DecidableRel]
     intros ck₁ ck₂
     cases ck₁
     case mk v₁ =>
@@ -162,5 +162,6 @@ theorem Clock.succ_lt (clk : Clock):
 by
   refine Clock_LT clk (clk + 1) ?_
   exact Nat.lt_add_one clk.val
+
 
 end Clocked

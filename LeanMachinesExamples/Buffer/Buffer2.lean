@@ -597,7 +597,7 @@ def B2.FetchPrio [DecidableEq α] [Inhabited α]: ConvergentRDetEvent Nat (B1 ct
         have Hcontra: b2.data = [] := by
             exact removeByPrio_mem_nil b2.data Hnone
         have Hcontra': b2.data.length = 0 := by
-          exact List.length_eq_zero.mpr Hcontra
+          exact List.length_eq_zero_iff.mpr Hcontra
         rw [Hcontra'] at Hgrd
         contradiction
 
@@ -642,7 +642,7 @@ def B2.FetchPrio [DecidableEq α] [Inhabited α]: ConvergentRDetEvent Nat (B1 ct
         have Hcontra: b2.data = [] := by
           exact removeByPrio_mem_nil b2.data Hnone
         have Hcontra': b2.data.length = 0 := by
-          exact List.length_eq_zero.mpr Hcontra
+          exact List.length_eq_zero_iff.mpr Hcontra
         rw [Hcontra'] at Hgrd
         contradiction
 
