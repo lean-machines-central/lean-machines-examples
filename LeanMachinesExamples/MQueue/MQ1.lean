@@ -20,6 +20,7 @@ structure MQContext extends BoundedCtx, PrioCtx
 
 structure Message (α : Type 0) [instDec: DecidableEq α] extends Message0 α where
   prio : Prio
+deriving Repr
 
 instance [instDec: DecidableEq α] (m₁ m₂ : @Message α instDec): Decidable (m₁ = m₂) :=
   by cases m₁ ; cases m₂
@@ -78,8 +79,8 @@ theorem liftMessages_in [DecidableEq α] (ms : Finset (Message α)):
   ∀ msg ∈ ms, (liftMessage msg) ∈ liftMessages ms :=
 by
   simp [liftMessage, liftMessages]
-  intros msg Hmsg
-  exists msg
+  -- intros msg Hmsg
+  -- exists msg
 
 @[simp]
 def MQ1.lift [DecidableEq α] (mq : MQ1 α ctx) : MQ0 α ctx.toBoundedCtx :=
@@ -183,7 +184,7 @@ theorem unliftMessages_in [DecidableEq α] (msg0s : Finset (Message0 α)):
 by
   intros msg0 Hmsg0
   simp [unliftMessage, unliftMessages]
-  exists msg0
+  assumption
 
 theorem liftMessage_roundTrip [DecidableEq α] (ms : Finset (Message0 α)):
   liftMessages (unliftMessages ms) = ms :=
@@ -590,13 +591,13 @@ by
           exact (Finset.mem_map' f).mpr Hxx
         exact Eq.symm (Finset.insert_sdiff_of_mem (Finset.map f xs) Hfx')
       case neg Hxx =>
-        rw [Finset.insert_sdiff_of_not_mem xs Hxx]
+        rw [Finset.insert_sdiff_of_notMem xs Hxx]
         rw [@Finset.map_insert]
         simp [Hind]
         have Hfx' : f x ∉ Finset.map f t := by
           rw [@Finset.mem_map']
           assumption
-        exact Eq.symm (Finset.insert_sdiff_of_not_mem (Finset.map f xs) Hfx')
+        exact Eq.symm (Finset.insert_sdiff_of_notMem (Finset.map f xs) Hfx')
 
 def MQ1.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (MQ1 α ctx) Unit (α × Prio) Unit α :=
   newRNDEvent MQ0.Dequeue.toOrdinaryNDEvent {
@@ -808,11 +809,12 @@ def MQ1.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (M
                 mq'.clock = mq.clock
                 ∧  (∃ ms : Finset (Message α),
                      ms ⊆ mq.messages ∧ ms ≠ ∅ ∧ mq'.messages = mq.messages \ ms
-                     ∧ ∀ msg₁ ∈ ms, ∀ msg₂ ∈ mq'.messages, msg₁.prio ≤ msg₂.prio)
+                     ∧ (∀ msg₁ ∈ ms, ∀ msg₂ ∈ mq'.messages, msg₁.prio ≤ msg₂.prio )
+                     ∧ y = ms)
 
     safety := fun mq _ => by
       simp [Machine.invariant]
-      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd mq' Hclk ms Hms₁ Hms₂ Hmq' Hprio
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd ms mq' Hclk Hms₁ Hms₂ Hmq' Hprio
       simp [Hmq'] at Hprio
       simp [Hmq']
       constructor
@@ -840,10 +842,10 @@ def MQ1.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (M
         refine msgEx mq mq.minPrio ?_
         exact minPrio_in' mq Hne
       obtain ⟨msg, Hmsg⟩ := Hex
+      exists {msg}
       exists {mq with messages := mq.messages \ {msg}}
       simp
       obtain ⟨Hmsg₁, Hmsg₁'⟩ := Hmsg
-      exists {msg}
       simp [Hmsg₁]
       intros msg₂ Hmsg₂
       intros Hneq
@@ -855,13 +857,15 @@ def MQ1.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ0 α ctx.toBoundedCtx) (M
 
     simulation := fun mq _ => by
       simp [Machine.invariant, Refinement.refine, MQ0.Discard, FRefinement.lift, liftMessages]
-      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd mq' Hmq' ms Hms₁ Hms₂ Hmq'' Hprio
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hgrd ms m Hclk Hms₁ Hms₂ Hmq' Hprio
       constructor
-      case left => exact Hmq'
-      case right =>
-        exists (Finset.map liftMessage ms)
-        simp [Hms₁, Hms₂, Hmq'']
+      · exact Hclk
+      · apply And.intro Hms₁
+        apply And.intro Hms₂
+        simp[Hms₁, Hms₂, Hmq']
         exact Finset_map_sdiff mq.messages ms liftMessage
+
+
   }
 
 def shiftPrio  [DecidableEq α] (n : Nat) (msg : Message α) : Message α :=

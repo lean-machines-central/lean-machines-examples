@@ -11,7 +11,7 @@ open Clocked
 structure MQ2 (α : Type 0) [instDec: DecidableEq α] (ctx : MQContext)
     extends MClocked where
   queue : List (Message α)
-
+#check MQ2.mk
 @[simp]
 def MQ2.messages [DecidableEq α] (mq : MQ2 α ctx) : Finset (Message α) :=
   mq.queue.toFinset
@@ -365,7 +365,7 @@ by
     exact Hpos
   case neg Hneg =>
     have Hcontra: x' ∉ s \ {x} := by
-      exact Finset.not_mem_sdiff_of_not_mem_left Hneg
+      exact Finset.notMem_sdiff_of_notMem_left Hneg
     contradiction
 
 theorem Finset_sdiff_elem [DecidableEq α] (x x' : α) (s : Finset α):
@@ -456,7 +456,7 @@ by
     case isFalse Hneq =>
       simp [Hneq]
       rw [Hind Hnd]
-      refine Eq.symm (Finset.insert_sdiff_of_not_mem xs.toFinset ?_)
+      refine Eq.symm (Finset.insert_sdiff_of_notMem xs.toFinset ?_)
       simp [Finset.sdiff_singleton_eq_erase]
       assumption
 
@@ -550,7 +550,19 @@ def MQ2.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
       exists msg
       simp [Hmsg, Hy, Hpy, Hclk]
       constructor
-      · exact List_erase_Finset_Nodup mq.queue msg Hinv₅
+      · constructor
+        ·
+          have ⟨mclk',_⟩ := mq'
+          have ⟨mclk,_ ⟩ := mq
+          simp
+          simp at Hclk
+          cases mclk'
+          case mk clk' =>
+            cases mclk
+            case mk clk =>
+              simp at Hclk
+              rw[Hclk]
+        · exact List_erase_Finset_Nodup mq.queue msg Hinv₅
       · intros msg Hmsg Hneq
         exact Hprio msg Hmsg Hneq
 
@@ -644,7 +656,9 @@ by
     intros zs Hzs₁ Hzs₂
     have H₁: x ∈ zs := by
       rw [@List.perm_comm] at Hzs₁
-      have H₁ : x ∈ x :: xs := by exact List.mem_cons_self x xs
+      have H₁ : x ∈ x :: xs :=
+      by
+        exact List.mem_cons_self
       exact (List.Perm.mem_iff Hzs₁).mp H₁
     constructor
     case left => exact List.Sublist.mem H₁ Hzs₂
@@ -702,11 +716,12 @@ def MQ2.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
                      ms ⊆ mq.messages ∧ ms ≠ ∅
                      ∧ mq'.messages = mq.messages \ ms
                      ∧ List_Submset mq'.queue mq.queue
-                     ∧ ∀ msg₁ ∈ ms, ∀ msg₂ ∈ mq'.messages, msg₁.prio ≤ msg₂.prio)
+                     ∧ (∀ msg₁ ∈ ms, ∀ msg₂ ∈ mq'.messages, msg₁.prio ≤ msg₂.prio)
+                     ∧ y = ms)
 
     safety := fun mq _ => by
       simp [Machine.invariant]
-      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hgrd mq' Hclk ms Hms₁ Hms₂ Hmq' Hsub Hprio
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hgrd ms mq' Hclk Hms₁ Hms₂ Hmq' Hsub Hprio
 
       constructor
       · have Hlen: mq'.queue.length ≤ mq.queue.length := by
@@ -738,9 +753,9 @@ def MQ2.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
         apply MQ2.minElemEx
         exact Hgrd
       obtain ⟨msg, Hmsg⟩ := Hex
+      exists {msg}
       exists {clock:=mq.clock, queue := mq.queue.erase msg}
       simp
-      exists {msg}
       simp [Hmsg]
       constructor
       · exact List_erase_Finset_Nodup mq.queue msg Hinv₅
@@ -759,11 +774,12 @@ def MQ2.Discard [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
 
     simulation := fun mq _ => by
       simp [Machine.invariant, MQ1.Discard, FRefinement.lift]
-      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hgrd mq' Hclk ms Hms₁ Hms₂ Hmq' Hsub Hprio
+      intros Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hgrd ms mq' Hclk Hms₁ Hms₂ Hmq' Hsub Hprio
       constructor
       · assumption
-      · exists ms
-
+      · constructor
+        · exact Hms₁
+        · apply And.intro Hms₂ (And.intro Hmq' Hprio)
   }
 
 

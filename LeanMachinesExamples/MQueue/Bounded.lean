@@ -3,6 +3,8 @@ import LeanMachines.Event.Basic
 import LeanMachines.Event.Ordinary
 import LeanMachines.Event.Convergent
 import LeanMachines.NonDet.Ordinary
+import LeanMachines.Event.Algebra.Ordinary
+
 
 structure BoundedCtx where
   maxCount : Nat
@@ -33,6 +35,8 @@ def Incr : OrdinaryEvent (Bounded ctx) Unit Unit :=
                    exact Hgrd
   }
 
+
+
 def Decr : ConvergentEvent Nat (Bounded ctx) Unit Unit :=
   newConvergentEvent'' {
     guard m := m.count > 0
@@ -42,22 +46,25 @@ def Decr : ConvergentEvent Nat (Bounded ctx) Unit Unit :=
     convergence m := by simp; omega
   }
 
+
+
+
+
 def Discard : OrdinaryNDEvent (Bounded ctx) Unit Nat :=
   newNDEvent {
     guard m _ := m.count > 0
     effect m _ grd := fun (k, m') =>
-      ∃ k > 0, m' = {m with count := m.count - k}
+      ∃ k₁ > 0, m' = {m with count := m.count - k₁} ∧ k₁ = k
 
     safety m _ := by
       simp [Machine.invariant]
-      intros Hinv Hgrd m' k Hk Hm'
-      simp [Hm']
-      exact Nat.le_add_right_of_le Hinv
+      intros hinv hgrd y hy
+      exact Nat.le_add_right_of_le hinv
+
 
     feasibility m _ := by
       simp [Machine.invariant]
       intros Hinv Hgrd
-      exists { count := m.count - 1}
       exists 1
 
   }

@@ -2,8 +2,10 @@ import LeanMachinesExamples.MQueue.Bounded
 import LeanMachinesExamples.MQueue.Prioritized
 import LeanMachinesExamples.MQueue.Clocked
 
+import LeanMachines.Refinement.Relational.NonDet.Basic
 import LeanMachines.Refinement.Functional.Basic
 import LeanMachines.Refinement.Functional.Concrete
+import LeanMachines.NonDet.Algebra.Ordinary
 
 import Mathlib.Data.Finset.Card
 import Mathlib.Data.Finset.SDiff
@@ -19,6 +21,7 @@ open Clocked
 structure Message0 (α : Type 0) [instDec: DecidableEq α] where
   payload : α
   timestamp : Clock
+deriving Repr
 
 instance [instDec: DecidableEq α] (m₁ m₂ : @Message0 α instDec): Decidable (m₁ = m₂) :=
   by cases m₁
@@ -30,8 +33,11 @@ instance [instDec: DecidableEq α] (m₁ m₂ : @Message0 α instDec): Decidable
 
 @[ext]
 structure MQ0 (α : Type 0) [instDec: DecidableEq α] (ctx : BoundedCtx)
-    extends MClocked where
+    extends MClocked  where
   messages : Finset (Message0 (instDec:=instDec))
+
+
+
 
 instance [instDec: DecidableEq α]: Machine BoundedCtx (MQ0 α (instDec:=instDec) ctx) where
   context := ctx
@@ -150,6 +156,35 @@ def MQ0.Enqueue [DecidableEq α] : OrdinaryREvent (Bounded ctx) (MQ0 α ctx) α 
 
       rw [Hcard]
   }
+#check FRefinement
+
+def MQ0.Enqueue' [DecidableEq α] : OrdinaryREvent (Bounded ctx) (MQ0 α ctx) α Nat Unit Nat :=
+  let f : Unit → Nat := λ _ => 1
+  let f' : Unit → Nat := λ _ => 1
+  let ev := MQ0.Enqueue (α := α) (ctx := ctx)
+  let ev' := f <$> ev.toOrdinaryEvent
+  newFREvent (f' <$> Bounded.Incr)
+  {
+    guard := ev'.guard
+    action m x grd := ev'.action m x grd
+    safety := ev'.po.safety
+    strengthening m x hinv hgrd :=
+      by
+        simp[Functor.map,map_Event,_root_.mapEvent]
+        have h := ev.po.strengthening
+        assumption
+    simulation m x hinv hgrd :=
+      by
+        simp[Functor.map,map_Event,_root_.mapEvent]
+        have h := ev.po.simulation m x hinv hgrd (FRefinement.lift m) (lift_ref m hinv)
+        simp at h
+        constructor
+        · rfl
+        · assumption
+    lift_in := λ _ => ()
+    lift_out := id
+  }
+
 
 theorem Finset_card_sdiff_le [DecidableEq α] (t s : Finset α):
   (t \ s).card ≤ t.card :=
@@ -222,6 +257,51 @@ def MQ0.Dequeue [DecidableEq α] : OrdinaryRNDEvent (Bounded ctx) (MQ0 α ctx) U
   }
 
 
+
+def MQ0.Dequeue_c [DecidableEq α] (f : α → Nat): OrdinaryRNDEvent (Bounded ctx) (MQ0 α ctx) Unit Nat Unit Unit :=
+  let ev := (MQ0.Dequeue (α := α ) (ctx := ctx))
+  let ev' := f <$> ev.toOrdinaryNDEvent
+  let f' := λ _ => ()
+  newRNDEvent (f' <$> Decr.toOrdinaryEvent.toOrdinaryNDEvent)
+  {
+    guard := ev'.guard
+    effect := (f <$> ev.toOrdinaryNDEvent).effect
+    safety := ev'.po.safety
+    feasibility := ev'.po.feasibility
+    lift_in := id
+    lift_out := λ _ => ()
+    strengthening := ev.po.strengthening
+
+
+    simulation m x hinv hgrd y m' :=
+      by
+        simp only [Functor.map,map_Event,_root_.mapEvent]
+        intros hef am Href
+        have ⟨x,m'',⟨hef,⟨heq,meq⟩⟩⟩ := hef
+        simp at hef
+        rw[←meq] at hef
+        have h := ev.po.simulation m () hinv hgrd x m' hef am Href
+        cases h
+        case intro am' h =>
+          exists am'
+          constructor
+          · exists ()
+            exists am'
+            constructor
+            · exact h.1
+            · exact (And.intro trivial rfl)
+          · exact h.2
+
+
+
+  }
+
+
+
+
+
+
+
 def MQ0.Discard [DecidableEq α] : OrdinaryRNDEvent (Bounded ctx) (MQ0 α ctx) Unit (Finset (Message0 α)) Unit Nat :=
   newRNDEvent Bounded.Discard {
     lift_in := id
@@ -230,11 +310,11 @@ def MQ0.Discard [DecidableEq α] : OrdinaryRNDEvent (Bounded ctx) (MQ0 α ctx) U
     effect := fun mq _ _ (y, mq') =>
                 mq'.clock = mq.clock
                 ∧  (∃ ms : Finset (Message0 α),
-                     ms ⊆ mq.messages ∧ ms ≠ ∅ ∧ mq'.messages = mq.messages \ ms)
+                     ms ⊆ mq.messages ∧ ms ≠ ∅ ∧ mq'.messages = mq.messages \ ms ∧ y = ms)
 
     safety := fun mq => by
       simp [Machine.invariant]
-      intros Hinv₁ Hinv₂ Hinv₃ Hgrd mq' Hclk msgs Hms₁ Hms₂ Heff
+      intros Hinv₁ Hinv₂ Hinv₃ Hgrd y mq' Hclk Hms₁ yne Heff
       constructor
       · rw [Heff]
         rw [Finset.card_sdiff Hms₁]
@@ -263,8 +343,8 @@ def MQ0.Discard [DecidableEq α] : OrdinaryRNDEvent (Bounded ctx) (MQ0 α ctx) U
       exists {msg}
       exists {clock:=mq.clock, messages:=mq.messages \ {msg}}
       simp
-      exists {msg}
-      simp [Hmsg]
+      assumption
+
 
     strengthening := fun mq _ => by
       intro Hinv
@@ -276,9 +356,7 @@ def MQ0.Discard [DecidableEq α] : OrdinaryRNDEvent (Bounded ctx) (MQ0 α ctx) U
       intros Hinv Hgrd ms mq'
       simp at Hgrd
       simp [Refinement.refine, Bounded.Discard, FRefinement.lift]
-      intros Hclk ms Hms₁ Hms₂ Hmq'
-      exists ms.card
-      simp
+      intros Hclk Hms₁ Hms₂ Hmq'
       rw [Hmq']
       constructor
       · exact Finset.nonempty_iff_ne_empty.mpr Hms₂

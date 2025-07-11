@@ -308,8 +308,8 @@ instance: LinearOrder MessageSig where
   le_total m₁ m₂ := by
     exact MessageSig.le_total m₁ m₂
 
-  decidableLE m₁ m₂ := by
-    simp
+  toDecidableLE m₁ m₂ := by
+    --simp
     unfold LE.le
     simp [Preorder.toLE, PartialOrder.toPreorder, instPartialOrderMessageSig,
           instPreorderMessageSig, instLEMessageSig]
@@ -330,11 +330,112 @@ instance: LinearOrder MessageSig where
       simp [H₁]
     case isFalse H₁ =>
       simp [H₁]
-      split
-      case isTrue H₂ =>
-        assumption
-      case isFalse H₂ =>
-        rfl
+      -- split
+      -- case isTrue H₂ =>
+      --   assumption
+      -- case isFalse H₂ =>
+      --   rfl
+
+  compare_eq_compareOfLessAndEq a b :=
+  by
+    simp[compare,compareOfLessAndEq]
+    simp[compareLex,compareOn,compare,compareOfLessAndEq]
+    by_cases a.1.prio < b.1.prio
+    case pos Hpos =>
+      simp[Hpos]
+      intro hneg
+      have hctr := MessageSig_lt_prio a b Hpos
+      contradiction
+    case neg Hneg =>
+      simp[Hneg]
+      by_cases a.1.prio = b.1.prio
+      case pos Hpos₂ =>
+        simp[Hpos₂]
+        by_cases a.2 < b.2
+        case pos Hpos₃ =>
+          simp[Hpos₃]
+          intro hn
+          have hyp: a.1 = b.1 :=
+          by
+            have ⟨⟨pₐ⟩,_⟩ := a
+            have ⟨⟨pb⟩,_⟩ := b
+            simp
+            simp at Hpos₂
+            assumption
+          have hlt := MessageSig_lt_clk a b hyp Hpos₃
+          contradiction
+        case neg Hneg₃ =>
+          simp[Hneg₃]
+          have h : ¬ a < b :=
+          by
+            have ⟨⟨pa⟩,ca⟩ := a
+            have ⟨⟨pb⟩,cb⟩ := b
+            simp at *
+            intro hf
+            unfold LT.lt at hf
+            simp[instLTMessageSig] at hf
+            cases hf
+            case inl hf =>
+              rw[Hpos₂] at hf
+              unfold LT.lt at hf
+              simp[instLTPrio] at hf
+            case inr hf =>
+              have ⟨_,r⟩ := hf
+              by_cases cb = ca
+              case pos Hpos₅ =>
+                rw[←Hpos₅] at r
+                exact (lt_self_iff_false cb).mp r
+              case neg Hneg₅ =>
+                have h : cb < ca :=
+                  by exact lt_of_le_of_ne Hneg₃ Hneg₅
+                have h : cb < cb :=
+                  by
+                    exact lt_of_le_of_lt Hneg₃ r
+                exact (lt_self_iff_false cb).mp h
+          simp[h]
+
+          by_cases a.2 = b.2
+          case pos Hpos₄ =>
+            simp[Hpos₄]
+            have ⟨⟨pa⟩,ca⟩ := a
+            have ⟨⟨pb⟩,cb⟩ := b
+            simp at *
+            apply And.intro Hpos₂ Hpos₄
+          case neg Hneg₄ =>
+            simp[Hneg₄]
+            intro hf
+            have ⟨⟨pa⟩,ca⟩ := a
+            have ⟨⟨pb⟩,cb⟩ := b
+            simp at *
+            have ⟨_,hf⟩ := hf
+            contradiction
+      case neg Hneg₂ =>
+        simp[Hneg₂]
+        have h : a > b :=
+          by
+            unfold GT.gt
+            unfold LT.lt
+            simp[instLTMessageSig]
+            left
+            have h' : b.1.prio < a.1.prio := by omega
+            unfold LT.lt
+            simp[instLTPrio]
+            assumption
+        have h' : ¬ a < b :=
+        by
+          intro hf
+          have hf' : b < a := by omega
+          have hf'' : a < a := by exact gt_trans h hf
+          exact (lt_self_iff_false a).mp hf''
+        have h'' : ¬ a = b :=
+          by
+            intro hf
+            have ⟨⟨pa⟩,ca⟩ := a
+            have ⟨⟨pb⟩,cb⟩ := b
+            simp at *
+            have ⟨hf',_⟩ := hf
+            contradiction
+        simp[h',h'']
 
 theorem MessageSig.le_prio (m₁ m₂ : MessageSig):
   m₁ ≤ m₂ → m₁.1 ≤ m₂.1 :=
@@ -556,6 +657,8 @@ by
 structure MQ3 (α : Type 0) [instDec: DecidableEq α] (ctx : MQContext)
     extends MQ2 α ctx where
 
+
+
 @[simp]
 def MQ3.lift [DecidableEq α] (mq : MQ3 α ctx) : MQ2 α ctx :=
   mq.toMQ2
@@ -708,7 +811,7 @@ by
     case mpr =>
       simp
       have Hin : ms.sig ∈ List.map Message.sig mqueue := by
-        exact List.mem_map_of_mem Message.sig Hms
+        exact List.mem_map_of_mem Hms
       have Hneq : ms.sig ≠ x.sig := by
         exact ne_of_mem_of_not_mem Hin Hnotin
       unfold LE.le
@@ -730,7 +833,7 @@ by
       exact Message.sigLE ms x H
     case mpr =>
       have Hin : ms.sig ∈ List.map Message.sig mqueue := by
-        exact List.mem_map_of_mem Message.sig Hms
+        exact List.mem_map_of_mem Hms
       have Hneq : ms.sig ≠ x.sig := by
         exact ne_of_mem_of_not_mem Hin Hnotin
       unfold LE.le
@@ -1011,7 +1114,7 @@ def MQ3.Dequeue [DecidableEq α] [Inhabited α]: OrdinaryRDetEvent (MQ2 α ctx) 
           rfl
         rw [H₁]
         have Hsig: msg.sig ∈ List.map Message.sig mq.queue := by
-          refine List.mem_map_of_mem Message.sig ?_
+          refine List.mem_map_of_mem ?_
           exact List_Perm_in amq.queue mq.queue (id (List.Perm.symm Href₁)) msg Hmsg
         have Hmsg'' : msg ∈ mq.queue := by
           exact List_Perm_in amq.queue mq.queue (id (List.Perm.symm Href₁)) msg Hmsg
@@ -1025,7 +1128,7 @@ def MQ3.Dequeue [DecidableEq α] [Inhabited α]: OrdinaryRDetEvent (MQ2 α ctx) 
             exact Hmsg''
         have Hsup: msg.sig ≤ (mq.queue.head Hgrd).sig := by
           apply List.rel_of_sorted_cons Hsort
-          exact List.mem_map_of_mem Message.sig Hmsg'''
+          exact List.mem_map_of_mem Hmsg'''
         have Hp: msg.prio = msg.sig.1 := rfl
         rw [Hp]
         exact MessageSig.le_prio msg.sig (mq.queue.head Hgrd).sig Hsup
@@ -1132,61 +1235,66 @@ def MQ3.Discard [DecidableEq α] : OrdinaryRDetEvent (MQ2 α ctx) (MQ3 α ctx) P
                queue := mq.queue.filter (fun msg => msg.prio ≥ prio) }
       simp [Ham₁, Ham₂]
       let lms := am.queue.filter (fun x => x.prio < prio)
-      exists lms.toFinset
       constructor
-      case left =>
-        refine Finset.subset_iff.mpr ?_
+      · refine Finset.subset_iff.mpr ?_
         intros msg' Hmsg'
         refine List.mem_toFinset.mpr ?_
         have Hmsg'' : msg' ∈ lms := by
-          exact List.mem_dedup.mp Hmsg'
-        exact List.mem_of_mem_filter Hmsg''
-      case right =>
-        simp
-        constructor
-        · have Hex: msg ∈ lms := by
-            refine List.mem_filter.mpr ?_
-            constructor
-            · exact List_Perm_in mq.queue am.queue Ham₁ msg Hmsg₁
-            · simp [Hmsg₂]
-          exact List.ne_nil_of_mem Hex
-        constructor
-        · refine Finset.ext_iff.mpr ?_
-          intro msg'
+          have h := List.mem_dedup.mpr Hmsg'
+          simp at h
+          refine List.mem_filter.mpr ?_
           constructor
-          · simp
-            intros Hmsg'₁ Hmsg'₂
+          · refine List_Perm_in mq.queue am.queue ?_ msg' ?_
+            · exact Ham₁
+            · exact h.1
+          · simp[h.2]
+        exact List.mem_of_mem_filter Hmsg''
+      · constructor
+        · intro hf
+          have h : msg ∈  {x ∈ mq.queue.toFinset | x.prio < prio} :=
+            Finset.mem_filter.mpr (And.intro  (List.mem_toFinset.mpr Hmsg₁) (Hmsg₂))
+          have h' := Finset.eq_empty_iff_forall_notMem.mp hf msg
+          contradiction
+        · constructor
+          · refine Finset.ext_iff.mpr ?_
+            intro msg'
             constructor
-            · exact List_Perm_in mq.queue am.queue Ham₁ msg' Hmsg'₁
-            · simp [lms]
-              intro Hmsg'₃
-              exact Hmsg'₂
+            · intro Hmsg'₁
+              have h := List_Perm_in mq.queue am.queue Ham₁ msg'
+              refine Finset.mem_sdiff.mpr ?_
+              simp at Hmsg'₁
+              have ⟨Hmsg'_in,Hmsg'_prio⟩ := Hmsg'₁
+              constructor
+              · refine List.mem_toFinset.mpr ?_
+                apply h
+                exact Hmsg'_in
+              · intro hf
+                simp at hf
+                have ⟨l,r⟩ := hf
+                have hyp := Preorder.lt_iff_le_not_le (α := Prio) msg'.prio prio
+                have hyp' := hyp.mp r
+                exact hyp'.2 Hmsg'_prio
 
-          · intro Hmsg'
-            simp at Hmsg'
-            obtain ⟨Hmsg'₁, Hmsg'₂⟩ := Hmsg'
-            simp
-            constructor
-            · exact List_Perm_in am.queue mq.queue (id (List.Perm.symm Ham₁)) msg' Hmsg'₁
-            · simp [lms] at Hmsg'₂
-              have Hmsg'₂ := Hmsg'₂ Hmsg'₁
-              assumption
-        constructor
-        · have Hsubp : mq.queue.Subperm am.queue := by exact List.Perm.subperm Ham₁
-          have Hsubf := List.Subperm.filter (fun x => decide (prio ≤ x.prio)) Hsubp
-          apply List.Subperm.trans (l₂:=(List.filter (fun x => decide (prio ≤ x.prio)) am.queue))
-          · exact Hsubf
-          · apply List.Sublist.subperm
-            · exact List.filter_sublist am.queue
+            · simp
+              intro Hmsg'₁ Hmsg'₂
+              have Hmsg'_mq : msg'∈ mq.queue :=
+              by
+                exact List_Perm_in am.queue mq.queue (List.Perm.symm Ham₁) msg' Hmsg'₁
+              exact And.intro Hmsg'_mq (Hmsg'₂ Hmsg'_mq )
+          · constructor
+            · have Hsubp : mq.queue.Subperm am.queue := by exact List.Perm.subperm Ham₁
+              have Hsubf := List.Subperm.filter (fun x => decide (prio ≤ x.prio)) Hsubp
+              apply List.Subperm.trans (l₂:=(List.filter (fun x => decide (prio ≤ x.prio)) am.queue))
+              · exact Hsubf
+              · apply List.Sublist.subperm
+                · exact List.filter_sublist
 
-        · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hmsg₂'
-          simp [lms] at Hmsg₁
-          obtain ⟨H₁, H₂⟩ := Hmsg₁
-          have H₁: msg₁.prio ≤ prio := by
-              exact le_of_lt H₂
-          exact Preorder.le_trans msg₁.prio prio msg₂.prio H₁ Hmsg₂'
+            · intros msg₁ Hmsg₁ Hmsg₁' msg₂ Hmsg₂ Hmsg₂'
+              have H₁: msg₁.prio ≤ prio := by
+                  exact le_of_lt Hmsg₁'
+              exact Preorder.le_trans msg₁.prio prio msg₂.prio H₁ Hmsg₂'
+
 
   }
-
 
 end MQueue
