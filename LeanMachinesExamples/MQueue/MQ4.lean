@@ -185,6 +185,15 @@ by
 axiom Array_insertionSort_Sorted {α} (as : Array α) (lt : α → α → Bool):
   (as.insertionSort (lt:=lt)).toList.Sorted (fun x₁ x₂ => lt x₁ x₂)
 
+axiom MQ4_insertionSort_Sorted {α} [DecidableEq α] (mq : MQ4 α ctx) :
+∀ x : α,
+  let nmq : MQ4 α ctx:=
+    { clock := mq.clock + 1,
+      queue :=
+        (mq.queue.push { payload := x, timestamp := mq.clock, prio := p }).insertionSort  (fun x₁ x₂ => x₁ ≤  x₂) }
+  let sigs := nmq.sigs
+  sigs.Sorted (fun x₁ x₂ => x₁ ≤  x₂)
+
 axiom Array_insertionSort_List_InsertionSort {α} (as : Array α) (lt : α → α → Bool):
   (as.insertionSort (lt:=lt)).toList = (as.toList).insertionSort (fun x₁ x₂ => lt x₁ x₂)
 
@@ -254,7 +263,8 @@ def MQ4.Enqueue [DecidableEq α] [Preorder α]: OrdinaryREvent (MQ3 α ctx) (MQ4
         have Hinv₂' := Hinv₂ { payload := x, timestamp := mq.clock, prio := p } Hcontra
         simp at Hinv₂'
       ·
-
+        -- Remaining goal : if we do a sorted insertion, the order of the
+        -- signatures is preserved
         sorry
 
     strengthening := fun mq (x, p) => by
@@ -263,8 +273,13 @@ def MQ4.Enqueue [DecidableEq α] [Preorder α]: OrdinaryREvent (MQ3 α ctx) (MQ4
     simulation := fun mq (x, p) => by
       simp [MQ3.Enqueue, FRefinement.lift, MQ3.enqueue_action, MQ4.lift]
       intros Hinv Hgrd₁ Hgrd₂ Hgrd₃
+      -- Remaining goal : doing a sorting insertion is the same
+      -- as inserting and then sorting the array
       sorry
   }
+
+axiom Array_pop_mem {α} (as : Array α) : ∀ a ∈ as.pop, a ∈ as
+axiom Array_pop_no_dup {α} (as : Array α) : as.toList.Nodup → as.pop.toList.Nodup
 
 
 def MQ4.Dequeue [DecidableEq α] [Inhabited α] [Preorder α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) Unit (α × Prio) :=
@@ -275,14 +290,83 @@ def MQ4.Dequeue [DecidableEq α] [Inhabited α] [Preorder α]: OrdinaryREvent (M
     action mq _ grd := let msg := mq.queue[mq.queue.size-1]
                        ((msg.payload, msg.prio), { mq with queue := mq.queue.pop })
 
-    safety mq _ grd := sorry
-    simulation mq _ grd := sorry
-    strengthening mq _ grd := sorry
+    safety mq _ hinv grd :=
+    by
+      simp[Machine.invariant]
+      simp[Machine.invariant] at hinv
+      have hincl : ∀ msg ∈ mq.queue.pop, msg ∈ mq.queue :=
+          by
+            intro msg hin
+            exact Array_pop_mem mq.queue msg hin
+      constructor
+      · exact Nat.le_add_right_of_le  hinv.1
+      constructor
+      · have h := hinv.2.1
+        intros msg hin
+        specialize hincl msg hin
+        exact h msg hincl
+      constructor
+      · intros msg₁ hin₁ msg₂ hin₂
+        have h := hinv.2.2.1
+        have hincl₁ := Array_pop_mem mq.queue msg₁ hin₁
+        have hincl₂ := Array_pop_mem mq.queue msg₂ hin₂
+        exact h msg₁ hincl₁ msg₂ hincl₂
+      constructor
+      · intro msg hin
+        apply hinv.2.2.2.1 msg (hincl msg hin)
+      constructor
+      · have h := hinv.2.2.2.2.1
+        exact Array_pop_no_dup mq.queue h
+      · have h := hinv.2.2.2.2.2
+        -- Remaining goal : removing an element preserves the order of
+        -- the signatures
+        sorry
+    simulation mq _ hinv grd :=
+    by
+      simp[FRefinement.lift,MQ4.lift,MQ3.Dequeue]
+      constructor
+      · rfl
+      · rfl
+    strengthening mq _ hinv grd :=
+    by
+      simp[FRefinement.lift,MQ4.lift,MQ3.Dequeue]
+      exact Array.size_pos_iff.mp grd
   }
+
+axiom List_filter_length (p : α → Bool): ∀ (l : List α),
+  (List.filter p l).length ≤ l.length
+
+axiom Array_filter_no_dup {α} (as : Array α) (p : α → Bool):
+  as.toList.Nodup → (List.filter p as.toList).Nodup
+
 
 def MQ4.Discard [DecidableEq α] [Preorder α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) Prio (List (Message α)) :=
   newAbstractSREvent MQ3.Discard.toOrdinaryEvent {
-    step_inv mq clk := by sorry
+    step_inv mq clk hinv grd :=
+    by
+      simp[Machine.invariant,SRefinement.unlift,MQ4.unlift,FRefinement.lift,MQ4.lift,MQ3.Discard]
+      simp[Machine.invariant] at hinv
+      constructor
+      · have h := List_filter_length (fun msg => decide (clk ≤ msg.prio)) mq.queue.toList
+        exact Nat.le_trans h hinv.1
+      constructor
+      · have h := hinv.2.1
+        intros msg hin hclk
+        exact h msg hin
+      constructor
+      · intros msg₁ hin₁ hclk₁ msg₂ hin₂ hclk₂
+        have h := hinv.2.2.1
+        apply h msg₁ hin₁ msg₂ hin₂
+      constructor
+      · have h := hinv.2.2.2.1
+        intros msg hin hclk
+        exact h msg hin
+      constructor
+      · exact Array_filter_no_dup mq.queue (fun msg => decide (clk ≤ msg.prio))  hinv.2.2.2.2.1
+      · have h := hinv.2.2.2.1
+        -- Remaining goal : filtering the list preserves the order of the
+        -- signatures
+        sorry
 
   }
 
