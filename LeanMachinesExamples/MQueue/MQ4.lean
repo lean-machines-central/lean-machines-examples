@@ -203,6 +203,10 @@ axiom Array_orderedInsert_InsertionSort {α} [LE α] [DecidableLE α] (l : Array
 axiom List_OrderedInsert_Reverse {α} [LE α] [DecidableLE α]  (l : List α) (x : α) :
   List.orderedInsert  (fun x1 x2 => x2 ≤ x1) x l.reverse = (List.orderedInsert  (fun x1 x2 => x2 ≤ x1) x l).reverse
 
+axiom List_push_Sorted {α} [LE α] [DecidableLE α] (l : List α ) (x : α) :
+List.Sorted (fun x₁ x₂ => x₁ ≤ x₂) l →
+  List.Sorted (fun x₁ x₂ => x₁ ≤ x₂) (List.orderedInsert  (fun x1 x2 => x1 ≤ x2) x l)
+
 
 def MQ4.Enqueue [DecidableEq α] [Preorder α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) (α × Prio) Unit :=
   newSREvent' MQ3.Enqueue.toOrdinaryEvent {
@@ -269,9 +273,18 @@ def MQ4.Enqueue [DecidableEq α] [Preorder α]: OrdinaryREvent (MQ3 α ctx) (MQ4
         intro Hcontra
         have Hinv₂' := Hinv₂ { payload := x, timestamp := mq.clock, prio := p } Hcontra
         simp at Hinv₂'
-      ·
-        -- Remaining goal : if we do a sorted insertion, the order of the
-        -- signatures is preserved
+      · simp[MQ4.sigs,MQ4.lift]
+        simp[MQ4.sigs,MQ4.lift] at Hinv₆
+        have h' := List_Sorted_reverse'
+            (List.map Message.sig
+              ((mq.queue.push { payload := x, timestamp := mq.clock, prio := p }).insertionSort
+                  fun x1 x2 => decide (x2 ≤ x1)).toList)
+        apply h'
+        have h'' := List_Sorted_reverse  (List.map Message.sig mq.queue.toList).reverse
+        specialize h'' Hinv₆
+        rw[List.reverse_reverse] at h''
+        have hyp := List_push_Sorted (List.map Message.sig mq.queue.toList) ⟨p,mq.clock⟩ h''
+
         sorry
 
     strengthening := fun mq (x, p) => by
@@ -289,7 +302,8 @@ def MQ4.Enqueue [DecidableEq α] [Preorder α]: OrdinaryREvent (MQ3 α ctx) (MQ4
 
 axiom Array_pop_mem {α} (as : Array α) : ∀ a ∈ as.pop, a ∈ as
 axiom Array_pop_no_dup {α} (as : Array α) : as.toList.Nodup → as.pop.toList.Nodup
-
+axiom List_pop_Sorted {α} [LE α] [DecidableLE α] (l : List α ) :
+List.Sorted (fun x₁ x₂ => x₁ ≤ x₂) l → List.Sorted (fun x₁ x₂ => x₁ ≤ x₂) l.dropLast
 
 def MQ4.Dequeue [DecidableEq α] [Inhabited α] [Preorder α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) Unit (α × Prio) :=
   newSREvent MQ3.Dequeue.toOrdinaryEvent {
@@ -327,9 +341,14 @@ def MQ4.Dequeue [DecidableEq α] [Inhabited α] [Preorder α]: OrdinaryREvent (M
       · have h := hinv.2.2.2.2.1
         exact Array_pop_no_dup mq.queue h
       · have h := hinv.2.2.2.2.2
-        -- Remaining goal : removing an element preserves the order of
-        -- the signatures
-        sorry
+        simp[MQ4.sigs,MQ4.lift]
+        simp[MQ4.sigs,MQ4.lift] at h
+        have h' := List_Sorted_reverse' (List.map Message.sig mq.queue.toList).dropLast
+        apply h'
+        have h'' := List_Sorted_reverse  (List.map Message.sig mq.queue.toList).reverse
+        specialize h'' h
+        rw[List.reverse_reverse] at h''
+        apply List_pop_Sorted (List.map Message.sig mq.queue.toList) h''
     simulation mq _ hinv grd :=
     by
       simp[FRefinement.lift,MQ4.lift,MQ3.Dequeue]
@@ -347,6 +366,11 @@ axiom List_filter_length (p : α → Bool): ∀ (l : List α),
 
 axiom Array_filter_no_dup {α} (as : Array α) (p : α → Bool):
   as.toList.Nodup → (List.filter p as.toList).Nodup
+
+axiom List_filter_map_Sorted {α}  [DecidableEq α]
+  (l : List (Message α) ) (p : Message α  → Bool) :
+List.Sorted (fun x₁ x₂ => x₁ ≤ x₂) (List.map Message.sig l) →
+  List.Sorted (fun x₁ x₂ => x₁ ≤ x₂) (List.map Message.sig (List.filter p l))
 
 
 def MQ4.Discard [DecidableEq α] [Preorder α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) Prio (List (Message α)) :=
@@ -372,11 +396,17 @@ def MQ4.Discard [DecidableEq α] [Preorder α]: OrdinaryREvent (MQ3 α ctx) (MQ4
         exact h msg hin
       constructor
       · exact Array_filter_no_dup mq.queue (fun msg => decide (clk ≤ msg.prio))  hinv.2.2.2.2.1
-      · have h := hinv.2.2.2.1
+      · have h := hinv.2.2.2.2.2
         -- Remaining goal : filtering the list preserves the order of the
         -- signatures
-        sorry
-
+        simp[MQ4.sigs,MQ4.lift]
+        simp[MQ4.sigs,MQ4.lift] at h
+        have h' := List_Sorted_reverse' (List.map Message.sig (List.filter (fun msg => decide (clk ≤ msg.prio)) mq.queue.toList))
+        apply h'
+        have h'' := List_Sorted_reverse  (List.map Message.sig mq.queue.toList).reverse
+        specialize h'' h
+        rw[List.reverse_reverse] at h''
+        exact List_filter_map_Sorted mq.queue.toList  (fun msg => decide (clk ≤ msg.prio))  h''
   }
 
 end MQueue
