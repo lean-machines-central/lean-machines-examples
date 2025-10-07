@@ -184,18 +184,25 @@ by
 
 axiom Array_insertionSort_Sorted {α} (as : Array α) (lt : α → α → Bool):
   (as.insertionSort (lt:=lt)).toList.Sorted (fun x₁ x₂ => lt x₁ x₂)
-
-axiom MQ4_insertionSort_Sorted {α} [DecidableEq α] (mq : MQ4 α ctx) :
-∀ x : α,
-  let nmq : MQ4 α ctx:=
-    { clock := mq.clock + 1,
-      queue :=
-        (mq.queue.push { payload := x, timestamp := mq.clock, prio := p }).insertionSort  (fun x₁ x₂ => x₁ ≤  x₂) }
-  let sigs := nmq.sigs
-  sigs.Sorted (fun x₁ x₂ => x₁ ≤  x₂)
+-- axiom MQ4_insertionSort_Sorted {α} [DecidableEq α] (mq : MQ4 α ctx) :
+-- ∀ x : α,
+--   let nmq : MQ4 α ctx:=
+--     { clock := mq.clock + 1,
+--       queue :=
+--         (mq.queue.push { payload := x, timestamp := mq.clock, prio := p }).insertionSort  (fun x₁ x₂ => x₁ ≤  x₂) }
+--   let sigs := nmq.sigs
+--   sigs.Sorted (fun x₁ x₂ => x₁ ≤  x₂)
 
 axiom Array_insertionSort_List_InsertionSort {α} (as : Array α) (lt : α → α → Bool):
   (as.insertionSort (lt:=lt)).toList = (as.toList).insertionSort (fun x₁ x₂ => lt x₁ x₂)
+
+axiom Array_orderedInsert_InsertionSort {α} [LE α] [DecidableLE α] (l : Array α) (x : α ) :
+  List.orderedInsert (fun x1 x2 => x2 ≤ x1) x l.toList =
+  ((l.push x).insertionSort (fun x1 x2 => x2 ≤ x1)).toList
+
+axiom List_OrderedInsert_Reverse {α} [LE α] [DecidableLE α]  (l : List α) (x : α) :
+  List.orderedInsert  (fun x1 x2 => x2 ≤ x1) x l.reverse = (List.orderedInsert  (fun x1 x2 => x2 ≤ x1) x l).reverse
+
 
 def MQ4.Enqueue [DecidableEq α] [Preorder α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) (α × Prio) Unit :=
   newSREvent' MQ3.Enqueue.toOrdinaryEvent {
@@ -273,9 +280,11 @@ def MQ4.Enqueue [DecidableEq α] [Preorder α]: OrdinaryREvent (MQ3 α ctx) (MQ4
     simulation := fun mq (x, p) => by
       simp [MQ3.Enqueue, FRefinement.lift, MQ3.enqueue_action, MQ4.lift]
       intros Hinv Hgrd₁ Hgrd₂ Hgrd₃
-      -- Remaining goal : doing a sorting insertion is the same
-      -- as inserting and then sorting the array
-      sorry
+
+      have h := Array_orderedInsert_InsertionSort mq.queue { payload := x, timestamp := mq.clock, prio := p }
+      rw[←h]
+      have h' := List_OrderedInsert_Reverse mq.queue.toList { payload := x, timestamp := mq.clock, prio := p }
+      exact h'
   }
 
 axiom Array_pop_mem {α} (as : Array α) : ∀ a ∈ as.pop, a ∈ as
