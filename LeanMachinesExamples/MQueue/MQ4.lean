@@ -184,21 +184,7 @@ by
 
 axiom Array_insertionSort_Sorted {α} [LE α] [DecidableLE α] (as : Array α) :
   (as.insertionSort (lt:= fun x₁ x₂ => decide (x₁ ≤ x₂))).toList.Sorted (fun x₁ x₂ =>  x₁ ≤ x₂)
--- axiom MQ4_insertionSort_Sorted {α} [DecidableEq α] (mq : MQ4 α ctx) :
--- ∀ x : α,
---   let nmq : MQ4 α ctx:=
---     { clock := mq.clock + 1,
---       queue :=
---         (mq.queue.push { payload := x, timestamp := mq.clock, prio := p }).insertionSort  (fun x₁ x₂ => x₁ ≤  x₂) }
---   let sigs := nmq.sigs
---   sigs.Sorted (fun x₁ x₂ => x₁ ≤  x₂)
 
-axiom Array_insertionSort_List_InsertionSort {α} (as : Array α) (lt : α → α → Bool):
-  (as.insertionSort (lt:=lt)).toList = (as.toList).insertionSort (fun x₁ x₂ => lt x₁ x₂)
-
-axiom Array_orderedInsert_InsertionSort {α} [LE α] [DecidableLE α] (l : Array α) (x : α ) :
-  List.orderedInsert (fun x1 x2 => x2 ≤ x1) x l.toList =
-  ((l.push x).insertionSort (fun x1 x2 => x2 ≤ x1)).toList
 
 
 theorem List_push_Sorted {α}  [LE α] [DecidableLE α] (l : List α ) (x : α)
@@ -235,12 +221,9 @@ List.Sorted (fun x₁ x₂ => x₁ ≤ x₂) l →
         · exact hind₃
 
 
-axiom Message.sig_monotonous [DecidableEq α] (l : List (Message α ))  :
-  List.Sorted (fun x₁ x₂ => x₁ ≤   x₂) l →
-    List.Sorted  (fun x₁ x₂ => x₁ ≤  x₂) (List.map Message.sig l)
 
 
-theorem Message.sig_monotonous' [DecidableEq α] (l : List (Message α ))  :
+theorem Message.sig_monotonous [DecidableEq α] (l : List (Message α ))  :
   List.Sorted (fun x₁ x₂ => x₁ ≤   x₂) l →
     List.Sorted  (fun x₁ x₂ => x₁ ≤ x₂) (List.map Message.sig l) :=
 by
@@ -269,12 +252,16 @@ by
     case a =>
       exact hind₃
 
+
+
+
 -- Axiom : if we reverse an array, then insert in the order (fun x1 x2 => x2 ≤ x1),
 -- it is the same as inserting in the order (fun x1 x2 => x1 ≤ x2) and then reversing it (to get it in the order x2 ≤ x1)
 axiom Array_reverse_ordered_insertion [LE α] [DecidableLE α] (as : Array α) (a : α ):
 List.orderedInsert (fun x1 x2 => x2 ≤ x1) a as.toList.reverse =
   ((as.push msg).insertionSort fun x1 x2 =>
         decide (x1 ≤ x2)).toList.reverse
+
 
 def MQ4.Enqueue [DecidableEq α] [Preorder α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) (α × Prio) Unit :=
   newSREvent' MQ3.Enqueue.toOrdinaryEvent {
