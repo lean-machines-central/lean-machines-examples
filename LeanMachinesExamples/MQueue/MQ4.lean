@@ -182,8 +182,8 @@ by
   · exact Hnd
   · apply Array_insertionSort_Perm (as:=as)
 
-axiom Array_insertionSort_Sorted {α} (as : Array α) (lt : α → α → Bool):
-  (as.insertionSort (lt:=lt)).toList.Sorted (fun x₁ x₂ => lt x₁ x₂)
+axiom Array_insertionSort_Sorted {α} [LE α] [DecidableLE α] (as : Array α) :
+  (as.insertionSort (lt:= fun x₁ x₂ => decide (x₁ ≤ x₂))).toList.Sorted (fun x₁ x₂ =>  x₁ ≤ x₂)
 -- axiom MQ4_insertionSort_Sorted {α} [DecidableEq α] (mq : MQ4 α ctx) :
 -- ∀ x : α,
 --   let nmq : MQ4 α ctx:=
@@ -200,13 +200,81 @@ axiom Array_orderedInsert_InsertionSort {α} [LE α] [DecidableLE α] (l : Array
   List.orderedInsert (fun x1 x2 => x2 ≤ x1) x l.toList =
   ((l.push x).insertionSort (fun x1 x2 => x2 ≤ x1)).toList
 
-axiom List_OrderedInsert_Reverse {α} [LE α] [DecidableLE α]  (l : List α) (x : α) :
-  List.orderedInsert  (fun x1 x2 => x2 ≤ x1) x l.reverse = (List.orderedInsert  (fun x1 x2 => x2 ≤ x1) x l).reverse
 
-axiom List_push_Sorted {α} [LE α] [DecidableLE α] (l : List α ) (x : α) :
+theorem List_push_Sorted {α}  [LE α] [DecidableLE α] (l : List α ) (x : α)
+(trans : ∀ a b c : α , a ≤ b → b ≤ c → a ≤ c ) (total : ∀ x y : α,¬ x ≤ y → y ≤ x) :
 List.Sorted (fun x₁ x₂ => x₁ ≤ x₂) l →
   List.Sorted (fun x₁ x₂ => x₁ ≤ x₂) (List.orderedInsert  (fun x1 x2 => x1 ≤ x2) x l)
+:=
+  by
+    intro hsorted
+    induction hsorted
+    case nil =>
+      simp
+    case cons hd tl hind₁ hind₂ hind₃ =>
+      simp
+      by_cases x ≤ hd
+      case pos Hpos =>
+        simp[Hpos]
+        constructor
+        · intro a hin
+          specialize hind₁ a hin
+          exact trans x hd a Hpos hind₁
+        constructor
+        · intros b hin
+          specialize hind₁ b hin
+          exact hind₁
+        · exact hind₂
+      case neg Hneg =>
+        simp[Hneg]
+        constructor
+        constructor
+        · exact total x hd Hneg
+        · intro a hin
+          exact hind₁ a hin
+        · exact hind₃
 
+
+axiom Message.sig_monotonous [DecidableEq α] (l : List (Message α ))  :
+  List.Sorted (fun x₁ x₂ => x₁ ≤   x₂) l →
+    List.Sorted  (fun x₁ x₂ => x₁ ≤  x₂) (List.map Message.sig l)
+
+
+theorem Message.sig_monotonous' [DecidableEq α] (l : List (Message α ))  :
+  List.Sorted (fun x₁ x₂ => x₁ ≤   x₂) l →
+    List.Sorted  (fun x₁ x₂ => x₁ ≤ x₂) (List.map Message.sig l) :=
+by
+  intro hsorted
+
+  induction hsorted
+
+  case nil => simp
+  case cons hd tl hind₁ hind₂ hind₃ =>
+    constructor
+    case a =>
+      intros a' hin
+      simp[sig] at hin
+      have ⟨a'',hin',heq⟩ := hin
+      rw[←heq]
+      specialize hind₁ a'' hin'
+      simp[LE.le] at hind₁
+      unfold LT.lt at hind₁
+      unfold instLTMessage at hind₁
+      simp at hind₁
+      cases hind₁
+      case inl hl =>
+        exact le_of_lt hl
+      case inr hr =>
+        exact le_of_eq (congrArg sig hr)
+    case a =>
+      exact hind₃
+
+-- Axiom : if we reverse an array, then insert in the order (fun x1 x2 => x2 ≤ x1),
+-- it is the same as inserting in the order (fun x1 x2 => x1 ≤ x2) and then reversing it (to get it in the order x2 ≤ x1)
+axiom Array_reverse_ordered_insertion [LE α] [DecidableLE α] (as : Array α) (a : α ):
+List.orderedInsert (fun x1 x2 => x2 ≤ x1) a as.toList.reverse =
+  ((as.push msg).insertionSort fun x1 x2 =>
+        decide (x1 ≤ x2)).toList.reverse
 
 def MQ4.Enqueue [DecidableEq α] [Preorder α]: OrdinaryREvent (MQ3 α ctx) (MQ4 α ctx) (α × Prio) Unit :=
   newSREvent' MQ3.Enqueue.toOrdinaryEvent {
@@ -219,7 +287,7 @@ def MQ4.Enqueue [DecidableEq α] [Preorder α]: OrdinaryREvent (MQ3 α ctx) (MQ4
     action := fun mq (x, p) _ => { clock := mq.clock + 1,
                                    queue := Array.insertionSort
                                      (mq.queue.push {payload:=x, prio:=p, timestamp:=mq.clock})
-                                     (·≥·)}
+                                     (·≤·)}
 
     safety := fun mq (x, p) => by
       simp [Machine.invariant]
@@ -268,36 +336,37 @@ def MQ4.Enqueue [DecidableEq α] [Preorder α]: OrdinaryREvent (MQ3 α ctx) (MQ4
       · refine
           Array_insertionSort_Nodup
             (mq.queue.push { payload := x, timestamp := mq.clock, prio := p })
-            (fun x1 x2 => decide (x2 ≤ x1)) ?_
+            (fun x1 x2 => decide (x1 ≤  x2)) ?_
         refine Array_push_Nodup mq.queue { payload := x, timestamp := mq.clock, prio := p } Hinv₅ ?_
         intro Hcontra
         have Hinv₂' := Hinv₂ { payload := x, timestamp := mq.clock, prio := p } Hcontra
         simp at Hinv₂'
-      · simp[MQ4.sigs,MQ4.lift]
+      ·
+        simp[MQ4.sigs,MQ4.lift]
         simp[MQ4.sigs,MQ4.lift] at Hinv₆
-        have h' := List_Sorted_reverse'
+        have h_goal_reverse := List_Sorted_reverse'
             (List.map Message.sig
               ((mq.queue.push { payload := x, timestamp := mq.clock, prio := p }).insertionSort
-                  fun x1 x2 => decide (x2 ≤ x1)).toList)
-        apply h'
-        have h'' := List_Sorted_reverse  (List.map Message.sig mq.queue.toList).reverse
-        specialize h'' Hinv₆
-        rw[List.reverse_reverse] at h''
-        have hyp := List_push_Sorted (List.map Message.sig mq.queue.toList) ⟨p,mq.clock⟩ h''
+                  fun x1 x2 => decide (x1 ≤ x2)).toList)
+        apply h_goal_reverse
 
-        sorry
+        have h_mono := Message.sig_monotonous
+          ((mq.queue.push { payload := x, timestamp := mq.clock, prio := p }).insertionSort
+          fun x1 x2 => decide (x1 ≤  x2)).toList
+        apply h_mono
+        exact Array_insertionSort_Sorted (mq.queue.push { payload := x, timestamp := mq.clock, prio := p })
+        -- apply h_anti_mono
+        -- exact Array_insertionSort_Sorted (mq.queue.push { payload := x, timestamp := mq.clock, prio := p })
 
     strengthening := fun mq (x, p) => by
       simp [MQ3.Enqueue, FRefinement.lift, MQ4.lift, MQ3.enqueue_guard]
 
     simulation := fun mq (x, p) => by
+      let msg : Message α := { payload := x, timestamp := mq.clock, prio := p }
       simp [MQ3.Enqueue, FRefinement.lift, MQ3.enqueue_action, MQ4.lift]
       intros Hinv Hgrd₁ Hgrd₂ Hgrd₃
+      exact Array_reverse_ordered_insertion mq.queue msg
 
-      have h := Array_orderedInsert_InsertionSort mq.queue { payload := x, timestamp := mq.clock, prio := p }
-      rw[←h]
-      have h' := List_OrderedInsert_Reverse mq.queue.toList { payload := x, timestamp := mq.clock, prio := p }
-      exact h'
   }
 
 axiom Array_pop_mem {α} (as : Array α) : ∀ a ∈ as.pop, a ∈ as
