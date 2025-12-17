@@ -391,7 +391,7 @@ by
   simp [Machine.invariant, variant]
   intros Hainv₁ _ Hinv₁ _ Hgrd₁ Hgrd₂ _ Hgrd₄
   have Hins: (insert (c, p) m.inscriptions).card = m.inscriptions.card + 1 := by
-    exact Finset.card_insert_of_not_mem Hgrd₄
+    exact Finset.card_insert_of_notMem Hgrd₄
   simp [Hins] ; clear Hins
   simp [invariant₁] at Hinv₁
   simp [M0.invariant₁] at Hainv₁
@@ -410,7 +410,7 @@ by
 
   apply Nat.sub_lt_sub_left
   · assumption
-  · simp_arith
+  · simp+arith
 
 theorem PO_simulation (m1 : M1 ctx) (p : Member) (c : Course):
     Machine.invariant m1
