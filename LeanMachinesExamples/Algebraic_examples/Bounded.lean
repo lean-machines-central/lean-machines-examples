@@ -85,6 +85,7 @@ def Add_n'' : OrdinaryEvent (Bounded ctx) Nat Nat :=
     action m x _ := (x,{count := m.count + x})
     safety _ _ _ hgrd := hgrd
   }
+
 def Sub_n' : OrdinaryEvent (Bounded ctx) Nat Nat :=
   newEvent
   {

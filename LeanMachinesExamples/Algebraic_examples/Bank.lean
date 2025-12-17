@@ -33,7 +33,7 @@ structure BankCTX where
 instance : Machine BankCTX BankAccount where
   context := {}
   default := {sold := (Euro.mk 0)}
-  invariant m := True
+  invariant _ := True
 
 
 def BankAccount.Init : InitEvent BankAccount Unit Unit :=
