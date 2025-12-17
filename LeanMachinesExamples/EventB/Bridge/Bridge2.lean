@@ -135,7 +135,7 @@ def EnterFromMainland₁ : OrdinaryREvent (Bridge1 ctx) (Bridge2 ctx) Unit Unit 
 
         have Hleft: b2.nbToIsland + 1 + b2.nbOnIsland < ctx.maxCars := by
           have H₁ : b2.nbToIsland + 1 + b2.nbOnIsland
-                    = b2.nbToIsland + b2.nbOnIsland + 1 := by simp_arith
+                    = b2.nbToIsland + b2.nbOnIsland + 1 := by simp+arith
           rw [H₁] ; clear H₁
           apply Nat.lt_of_le_of_ne
           · exact Hinv₁
@@ -170,7 +170,7 @@ def EnterFromMainland₂ : OrdinaryREvent (Bridge1 ctx) (Bridge2 ctx) Unit Unit 
                            simp [Hgrd₁] at *
                            simp [Hinv₃, Hinv₅, Hinv₁] at *
                            rw [←Hgrd₂]
-                           simp_arith
+                           simp+arith
 
     strengthening := fun b2 => by simp [Bridge1.EnterFromMainland, Refinement.refine, Bridge2.refine, Machine.invariant, invariant₁, invariant₂, invariant₃, invariant₄, invariant₅]
                                   intros Hinv₁ _ Hinv₃ _ _ _ _ Hgrd₁ _
@@ -271,7 +271,7 @@ def EnterIsland : ConvergentREvent Nat (Bridge1 ctx) (Bridge2 ctx) Unit Unit :=
         cases Hcut
         case inl Hcut =>
           simp [*] at *
-          have Hcalc := by calc  b2.nbToIsland - 1 + (b2.nbOnIsland + 1) = b2.nbToIsland - 1 + 1  + b2.nbOnIsland := by simp_arith
+          have Hcalc := by calc  b2.nbToIsland - 1 + (b2.nbOnIsland + 1) = b2.nbToIsland - 1 + 1  + b2.nbOnIsland := by simp+arith
                                  _ =   b2.nbToIsland + b2.nbOnIsland := by rw [Nat.sub_add_cancel]
                                                                            exact Hgrd
           rw [Hcalc]
@@ -313,11 +313,11 @@ def LeaveIsland₁ : ConvergentREvent Nat (Bridge1 ctx) (Bridge2 ctx) Unit Unit 
         simp [*] at *
         constructor
         · apply Nat.lt_of_le_of_ne
-          · apply Nat.le_of_pred_lt ; simp_arith [Hinv₂]
+          · apply Nat.le_of_pred_lt ; simp+arith [Hinv₂]
           · exact Ne.symm Hgrd₂
         · rw [Nat_sub_add_comm_cancel]
           · assumption
-          · apply Nat.le_of_pred_lt ; simp_arith [Hinv₂.1]
+          · apply Nat.le_of_pred_lt ; simp+arith [Hinv₂.1]
 
     variant := fun b2 => Bridge1.LeaveIsland.po.variant b2.toBridge1
 
