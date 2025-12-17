@@ -21,8 +21,8 @@ by
     have Hcontra: a - Nat.succ b < a := by
       apply Nat.sub_lt
       · assumption
-      · simp_arith
-    simp_arith [*] at *
+      · simp+arith
+    simp+arith [*] at *
 
 theorem Nat_le_sub_add (a b c : Nat):
   b ≤ c
@@ -50,7 +50,7 @@ by
       assumption
     case neg Hab =>
       have H₁ : a + b = a - b + c + b := by exact Nat.add_right_cancel_iff.mpr Hfalse
-      have H₂ : a - b + c + b = a - b + b + c := by simp_arith
+      have H₂ : a - b + c + b = a - b + b + c := by simp+arith
       rw [H₂] at H₁ ; clear H₂
       have H₃ : a - b + b = a  := by
         apply Nat.sub_add_cancel
@@ -101,7 +101,7 @@ theorem Finset_sdiff_insert_assoc [DecidableEq α] (s t : Finset α):
   → insert x (s \ t) = insert x s \ t :=
 by
   intro Hx
-  exact (Finset.insert_sdiff_of_not_mem s Hx).symm
+  exact (Finset.insert_sdiff_of_notMem s Hx).symm
 
 theorem Finset_card_union_le [DecidableEq α] (s t : Finset α):
   s.card ≤ (s ∪ t).card :=
@@ -111,7 +111,7 @@ by
     refine Finset.card_le_card ?_
     apply Finset.inter_subset_right
   apply Nat.le_sub_of_add_le'
-  simp_arith [H₁]
+  simp+arith [H₁]
 
 theorem Finset_insert_mem [DecidableEq α] (x : α) (s : Finset α):
   x ∈ s → insert x s = s :=

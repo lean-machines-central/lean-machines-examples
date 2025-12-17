@@ -101,8 +101,9 @@ def EnterFromMainland : OrdinaryREvent (Bridge0 ctx) (Bridge1 ctx) Unit Unit :=
       exact Eq.trans_lt (id Href.symm) Hgd₁
     simulation := fun b1 => by
       simp [Machine.invariant, Refinement.refine, Bridge0.EnterFromMainland, newEvent']
-      intros _ _ _ _ b0 Href
-      simp_arith [Href]
+      intros _ _ _ Hfr b0 Href
+      rw [Hfr] at *
+      simp+arith [←Href]
   }
 
 /-- Event: leaving to mainland (refinement of `Bridge0.LeaveToMainland`). -/
