@@ -172,10 +172,7 @@ newConcreteSREvent' {
       split
       case _ Heq =>
         have Hinv₃ := Hinv₃ per
-        refine Finset.union_subset_iff.mpr ?_
-        constructor
-        · assumption
-        · exact Finset.singleton_subset_iff.mpr Hgrd₂
+        (exact Finset.insert_subset Hgrd₂ Hinv₃)
       case _ Nheq =>
         exact Hinv₃ per'
     -- next

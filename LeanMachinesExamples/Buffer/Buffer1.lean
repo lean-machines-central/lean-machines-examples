@@ -74,7 +74,7 @@ def B1.Put : ConvergentREvent Nat (B0 ctx) (B1 ctx α) α Unit Unit Unit :=
     lift_in := fun _ => ()
 
     safety := fun b1 x => by
-      simp [Machine.invariant] ; intros ; linarith
+      simp [Machine.invariant, List.length_cons, Order.add_one_le_iff, imp_self, implies_true]
 
     strengthening := fun b1 _ => by
       simp [Machine.invariant, B0.Put, FRefinement.lift]
@@ -106,7 +106,7 @@ def B1.PutLast : ConvergentREvent Nat (B0 ctx) (B1 ctx α) α Unit Unit Unit :=
     lift_in := fun _ => ()
 
     safety := fun b1 x => by
-      simp [Machine.invariant] ; intros ; linarith
+      simp [Machine.invariant]
 
     strengthening := fun b1 _ => by
       simp [Machine.invariant, B0.Put, FRefinement.lift]

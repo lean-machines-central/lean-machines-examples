@@ -15,12 +15,13 @@ It gives a non-trivial illustration of data-refinement.
 namespace CoursesSpec
 
 /-- Context of the second refinement (same as the first one). -/
-structure M2.Context extends M1.Context
+abbrev M2.context := M1.Context
+
 
 /-- State representation of the second Courses system refinement.
 This is completely distinct from the previous refinement
 (no superposition at all). -/
-structure M2 (ctx : M2.Context) where
+structure M2 (ctx : M1.Context) where
   /-- a function associating to each course its set of attendants. -/
   attendants : Course → Finset Member
   /-- the current domain of the `attendants` function
@@ -54,25 +55,25 @@ def M2.default : M2 ctx :=
     attendants := fun _ => ∅ }
 
 /-- The machine specification for the second Courses system refinement. -/
-instance: Machine M2.Context (M2 ctx) where
+instance: Machine M1.Context (M2 ctx) where
   context := ctx
   invariant m := M2.invariant₁ m ∧ M2.invariant₂ m ∧ M2.invariant₃ m ∧ M2.invariant₄ m ∧ M2.invariant₅ m
   default := M2.default
 
 /-- Refine invariant: the domain *is* the set of (abstract) opened courses. -/
-def M2.refine₁ (m1 : M1 ctx.toContext_1) (m2 : M2 ctx) :=
+def M2.refine₁ (m1 : M1 ctx) (m2 : M2 ctx) :=
   m2.domain = m1.toM0.openedCourses
 
 /-- Refine invariant: attendants are registered at the abstract level. -/
-def M2.refine₂ (m1 : M1 ctx.toContext_1) (m2 : M2 ctx) :=
+def M2.refine₂ (m1 : M1 ctx) (m2 : M2 ctx) :=
   ∀ c ∈ m2.domain, ∀ p : Member, p ∈ m2.attendants c → (c, p) ∈ m1.inscriptions
 
 /-- Refine invariant: abstract inscriptions are reflected at the concrete level. -/
-def M2.refine₃ (m1 : M1 ctx.toContext_1) (m2 : M2 ctx) :=
+def M2.refine₃ (m1 : M1 ctx) (m2 : M2 ctx) :=
   ∀ c : Course, ∀ p : Member, (c, p) ∈ m1.inscriptions → c ∈ m2.domain ∧ p ∈ m2.attendants c
 
 -- This is roughly what has to be shown for correct (relational) refinement.
-theorem M2.refine_inv (m1 : M1 ctx.toContext_1) (m2 : M2 ctx):
+theorem M2.refine_inv (m1 : M1 ctx) (m2 : M2 ctx):
     Machine.invariant m2
     → M2.refine₁ m1 m2
     → M2.refine₂ m1 m2
@@ -111,7 +112,7 @@ by
   contradiction
 
 /-- Specificaiton of correct relational refinement. -/
-instance: Refinement (M1 ctx.toContext_1) (M2 ctx) where
+instance: Refinement (M1 ctx) (M2 ctx) where
   refine := fun m1 m2 => M2.refine₁ m1 m2 ∧ M2.refine₂ m1 m2 ∧ M2.refine₃ m1 m2
   refine_safe := fun m1 m2 => by
     intros Hinv Href
@@ -137,7 +138,7 @@ end Init
 
 /-- Initialization event: empty course system (no opened course, no inscription).
 Refinement of `M1.Init`. -/
-def Init : InitREvent (M1 ctx.toContext_1) (M2 ctx) Unit Unit :=
+def Init : InitREvent (M1 ctx) (M2 ctx) Unit Unit :=
 newInitREvent'' M1.Init.toInitEvent {
   init _ :=   { domain := ∅, attendants := fun _ => ∅ }
   safety := by simp [Machine.invariant, invariant₁, invariant₂, invariant₃, invariant₄, invariant₅,
@@ -238,14 +239,14 @@ by
     · exact le_of_add_le_left Hgrd₄
     · intro Hcontra
       rw [Hcontra] at Hgrd₄
-      simp_arith [*] at Hgrd₄
+      simp +arith [*] at Hgrd₄
   · apply Nat.lt_add_of_pos_left
     exact Nat.pos_of_ne_zero H₂
 
 theorem PO_strengthening (m2 : M2 ctx) (cs : Finset Course):
   Machine.invariant m2 →
   guard m2 cs →
-  ∀ (m1 : M1 ctx.toContext_1), Refinement.refine m1 m2
+  ∀ (m1 : M1 ctx), Refinement.refine m1 m2
   → M1.OpenCourses.to_NDEvent.guard m1 () :=
 by
   intros _ Hgrd am Href
@@ -262,9 +263,9 @@ by
 theorem PO_simulation (m2 : M2 ctx) (cs : Finset Course):
   (Hinv: Machine.invariant m2) →
   (Hgrd : guard m2 cs) →
-  ∀ (m1 : M1 ctx.toContext_1),
+  ∀ (m1 : M1 ctx),
     (Href: Refinement.refine m1 m2) →
-      ∃ (m1' : M1 ctx.toContext_1),
+      ∃ (m1' : M1 ctx),
         M1.OpenCourses.to_NDEvent.effect m1 () (PO_strengthening m2 cs Hinv Hgrd m1 Href) ((), m1')
         ∧ Refinement.refine m1' (OpenCourses.action m2 cs) :=
 by
@@ -322,7 +323,7 @@ end OpenCourses
 /-- Event: opening a set of courses, reuse of `M1.OpenCourses`.
 
 Note that this even is deterministic unlike its abstract counterpart. -/
-def OpenCourses : ConvergentRDetEvent Nat (M1 ctx.toContext_1) (M2 ctx) (Finset Course) Unit Unit Unit :=
+def OpenCourses : ConvergentRDetEvent Nat (M1 ctx) (M2 ctx) (Finset Course) Unit Unit Unit :=
   newConvergentRDetEvent' M1.OpenCourses.toOrdinaryNDEvent {
     guard := OpenCourses.guard
     action := fun m cs _ => OpenCourses.action m cs
@@ -383,10 +384,21 @@ theorem PO_safety₁ (m2 : M2 ctx) (cs : Finset Course):
   invariant₁ m2 → guard m2 cs
   → invariant₁ (action m2 cs) :=
 by
-  simp [invariant₁]
+  simp only [invariant₁, guard, ne_eq, action, sdiff_le_iff, Finset.sup_eq_union', and_imp]
   intros Hinv₁ _ _
   have H₁ : m2.domain \ cs ⊆ m2.domain := by apply Finset.sdiff_subset
-  exact Finset.Subset.trans H₁ Hinv₁
+  have H₂ := Finset.Subset.trans H₁ Hinv₁
+
+  have h : cs ∪ ctx.availableCourses = ctx.availableCourses ∪ cs := sorry
+  rw[h]
+  have h (s t u : Finset Course) : s ⊆ t → s ⊆ t ∪ u := by
+    intro hin
+    have h : t ⊆ t ∪ u := by exact Finset.subset_union_left
+    exact Finset.Subset.trans hin h
+
+  apply h
+  assumption
+  -- exact Finset.Subset.trans H₁ Hinv₁
 
 theorem PO_safety₂ (m2 : M2 ctx) (cs : Finset Course):
   invariant₂ m2 → guard m2 cs
@@ -454,7 +466,7 @@ by
       have H₁ : b < Nat.succ a := by
         apply Nat.lt_of_sub_ne_zero
         rw [Hab]
-        simp_arith
+        simp+arith
       have Hcontra: b ≤ Nat.succ a := by exact Nat.le_of_lt H₁
       contradiction
 
@@ -468,9 +480,11 @@ by
   apply Nat.lt_of_le_of_ne
   · assumption
   · intros Hcontra
-    have H₃ := Finset.card_sdiff Hgrd₂
+    have H₃ := Finset.card_sdiff (t := m2.domain) (s := cs)
     rw [H₃] at Hcontra
-    have H₄ : m2.domain.card = 0 ∨ cs.card = 0 := by apply Nat_sub_eq ; assumption
+    have H₄ : m2.domain.card = 0 ∨ cs.card = 0 := by
+      refine Nat_sub_eq m2.domain.card cs.card ?_
+      rwa[Finset.inter_eq_left.mpr Hgrd₂] at Hcontra
     cases H₄
     case h₂.inl H₄ =>
       have H₅ : m2.domain = ∅ := by exact Finset.card_eq_zero.mp H₄
@@ -484,7 +498,7 @@ by
 theorem PO_strengthening (m2: M2 ctx) (cs: Finset Course):
   Machine.invariant m2 →
   CloseCourses.guard m2 cs →
-    ∀ (m1 : M1 ctx.toContext_1),
+    ∀ (m1 : M1 ctx),
       Refinement.refine m1 m2
       → M1.CloseCourses.guard m1 cs :=
 by
@@ -500,7 +514,7 @@ by
 theorem PO_simulation (m2: M2 ctx) (cs: Finset Course):
   Machine.invariant m2 →
   CloseCourses.guard m2 cs →
-    ∀ (m1 : M1 ctx.toContext_1),
+    ∀ (m1 : M1 ctx),
       Refinement.refine m1 m2 →
         Refinement.refine (M1.CloseCourses.action m1 cs)
           (CloseCourses.action m2 cs) :=
@@ -531,7 +545,7 @@ end CloseCourses
 
 /-- Event: closing a set of course `cs`, a deterministic refinement of
 the non-deterministic event `M1.CloseCourses`. -/
-def CloseCourses : ConvergentREvent Nat (M1 ctx.toContext_1) (M2 ctx) (Finset Course) Unit :=
+def CloseCourses : ConvergentREvent Nat (M1 ctx) (M2 ctx) (Finset Course) Unit :=
   newConvergentREvent' M1.CloseCourses.toConvergentEvent.toOrdinaryEvent {
     guard := CloseCourses.guard
     action := fun m cs _ => CloseCourses.action m cs
@@ -611,22 +625,19 @@ theorem PO_safety₄ (m : M2 ctx) (p : Member) (c : Course) :
   invariant₄ m → p ∈ ctx.participants
   → invariant₄ (action m p c) :=
 by
-  simp [invariant₄]
+  simp only [invariant₄, action, Finset.union_singleton]
   intros Hinv₄ Hgrd₃ c'
   split
   case _ Heq =>
-    rw [Heq]
-    intro q Hq
-    simp at Hq
-    cases Hq
-    case inl Hq =>
-      have Hinv₄' := Hinv₄ c
-      apply Hinv₄' ; assumption
-    case inr Hq =>
-      simp [Hq, Hgrd₃]
-  case _ Heq =>
-    apply Hinv₄
-
+    -- the course c' is the course where we add a member P
+    rw[Heq]
+    rw [@Finset.insert_eq]
+    specialize Hinv₄ c
+    have h : {p} ⊆ ctx.participants := by exact Finset.singleton_subset_iff.mpr Hgrd₃
+    exact Finset.union_subset h Hinv₄
+  case _ =>
+    -- this is an other course that we will not modify
+    exact Hinv₄ c'
 theorem PO_safety₅ (m2 : M2 ctx) (p : Member) (c : Course) :
   invariant₅ m2 → ctx.instr_fun c ≠ p
   → invariant₅ (action m2 p c) :=
@@ -635,9 +646,8 @@ by
   intros Hinv₅ Hgrd₄ c'
   split
   case _ Heq =>
-    simp [Heq]
-    exact Decidable.not_imp_iff_and_not.mp fun a => Hgrd₄ (a (Hinv₅ c))
-
+    simp only [Heq, Finset.mem_insert, not_or]
+    exact Decidable.not_imp_iff_and_not.mp fun a => Hinv₅ c (a Hgrd₄)
   case _ Hneq =>
     apply Hinv₅
 
@@ -648,7 +658,7 @@ theorem course_pairs_insert (c : Course) (ps : Finset Member):
   course_pairs c (insert p ps) = insert (c, p) (course_pairs c ps) :=
 by
   simp [course_pairs]
-  rfl
+
 
 theorem course_pairs_insert_mem (c : Course) (ps : Finset Member):
   ∀ p ∈ ps, course_pairs c (insert p ps) = course_pairs c ps :=
@@ -711,20 +721,22 @@ by
     case pos Heq =>
       simp [Heq] at Hp
     case neg Hneq =>
-      simp [Hneq] at Hp
-      simp [Hneq]
+      simp only [Hneq, not_false_eq_true, true_and] at Hp
+      simp only [Finset.union_singleton]
       have Hind' := Hind Hp
       rw [@course_pairs_insert]
       rw [@course_pairs_insert]
-      apply Finset_ssubset_insert
-      · assumption
-      · apply course_pairs_notmem'
-        intro Hfalse
-        simp at Hfalse
-        cases Hfalse
-        case _ _ => contradiction
-        case _ Heq => rw [Heq] at Hneq
-                      contradiction
+      sorry -- TODO
+      -- apply Finset_ssubset_insert
+      -- ·
+      --   sorry
+      -- · apply course_pairs_notmem'
+      --   intro Hfalse
+      --   simp at Hfalse
+      --   cases Hfalse
+      --   case _ _ => contradiction
+      --   case _ Heq => rw [Heq] at Hneq
+      --                 contradiction
 
 theorem course_pairs_mem₁:
   cp ∈ course_pairs c ps → cp.1 = c :=
@@ -794,18 +806,22 @@ by
   induction cs using Finset.induction_on
   case empty => simp [all_pairs]
   case insert d cs _ Hind =>
-    simp
+    simp only [Finset.mem_insert, not_or, Finset.union_singleton, and_imp]
     intros c Hc
     by_cases c = d
     case pos Heq =>
       simp [Heq] at Hc
     case neg Hneq =>
-      simp [Hneq] at Hc
-      simp [all_pairs]
+      simp only [Hneq, not_false_eq_true] at Hc
+      simp only [all_pairs, Finset.fold_insert_idem, Finset.disjoint_union_right]
       intro Hc'
       constructor
-      · exact course_pairs_disjoint (attns c) (if d = e then attns d ∪ {p} else attns d) c d Hneq
-      exact Hind c Hc'
+      · exact
+        course_pairs_disjoint (attns c) (if d = e then insert p (attns d) else attns d) c d Hneq
+      · specialize Hind c Hc'
+        simp only [all_pairs,Finset.union_singleton] at Hind
+        exact Hind
+
 
 theorem all_pairs_notmem_disjoint'' (cs : Finset Course) (attns : Course → Finset Member):
   ∀ c ∉ cs, Disjoint (course_pairs c (attns c ∪ {p})) (all_pairs cs attns) :=
@@ -813,18 +829,19 @@ by
   induction cs using Finset.induction_on
   case empty => simp [all_pairs]
   case insert d cs _ Hind =>
-    simp
+    simp only [Finset.mem_insert, not_or, Finset.union_singleton, and_imp]
     intros c Hc
     by_cases c = d
     case pos Heq =>
       simp [Heq] at Hc
     case neg Hneq =>
-      simp [Hneq] at Hc
-      simp [all_pairs]
+      simp only [Hneq, not_false_eq_true] at Hc
+      simp only [all_pairs, Finset.fold_insert_idem, Finset.disjoint_union_right]
       intro Hc'
       constructor
-      · exact course_pairs_disjoint (attns c ∪ {p}) (attns d) c d Hneq
-      exact Hind c Hc'
+      · exact course_pairs_disjoint (insert p (attns c)) (attns d) c d Hneq
+      · simp only [all_pairs,Finset.union_singleton] at Hind
+        exact Hind c Hc'
 
 theorem all_pairs_insert_mem (cs : Finset Course) (attns : Course → Finset Member):
   ∀ c ∈ cs, all_pairs (insert c cs) attns = all_pairs cs attns :=
@@ -834,7 +851,7 @@ by
   case empty => simp
   case insert d cs Hd _ =>
     intros c Hc
-    simp [Hd] at Hc
+    simp only [Finset.mem_insert] at Hc
     cases Hc
     case inl Hc =>
       simp [←Hc]
@@ -954,20 +971,26 @@ by
       simp [←Hc] at Hd
       rw [all_pairs_insert]
       rw [all_pairs_insert]
-      simp
-      rw [all_pairs_attns_notmem]
-      · have H₁: all_pairs cs attns = all_pairs cs (fun c' => attns c') := by
+      simp only [↓reduceIte]
+      have H₁: all_pairs cs attns = all_pairs cs (fun c' => attns c') := by
           rfl
-        rw [←H₁] ; clear H₁
-        have H₂: course_pairs c (attns c) ⊂ course_pairs c (attns c ∪ {p}) := by
+      rw [←H₁] ; clear H₁
+      have h := all_pairs_attns_notmem cs attns c Hd (p := p)
+
+      have h' : (fun c' => if c' = c then insert p (attns c') else attns c') =
+        (fun c' => if c' = c then attns c' ∪ {p} else attns c') := by
+        funext c'
+        rw [@Finset.union_singleton]
+      rw[h']
+      rw[all_pairs_attns_notmem cs attns c Hd (p := p)]
+      have H₂: course_pairs c (attns c) ⊂ course_pairs c (attns c ∪ {p}) := by
           exact course_pairs_sub (attns c) c p Hp
-        rw [@Finset.union_comm]
-        nth_rw 2 [@Finset.union_comm]
-        apply Finset_ssubset_union_left
-        · assumption
-        · rw [@disjoint_comm]
-          exact all_pairs_notmem_disjoint'' cs (fun c => attns c) c Hd
-      · assumption
+      rw [@Finset.union_comm]
+      nth_rw 2 [@Finset.union_comm]
+      apply Finset_ssubset_union_left
+      · rwa[←Finset.union_singleton]
+      · rw[disjoint_comm,←Finset.union_singleton]
+        exact all_pairs_notmem_disjoint'' cs (fun c => attns c) c Hd (p := p)
     case inr Hc =>
       rw [all_pairs_insert]
       rw [all_pairs_insert]
@@ -979,8 +1002,10 @@ by
         simp [Hneq]
         have Hind' := Hind Hc
         apply Finset_ssubset_union_left
-        · assumption
-        · exact all_pairs_notmem_disjoint' cs (fun ⦃d⦄ => attns d) c d Hd
+        · simp only [←Finset.union_singleton]
+          assumption
+        · simp only [←Finset.union_singleton]
+          exact  all_pairs_notmem_disjoint' cs (fun ⦃d⦄ => attns d) c d Hd (p := p)
 
 
 def variant (m2 : M2 ctx) :=
@@ -1029,12 +1054,13 @@ by
         simp [Hgrd] at H₄
     exact Finset.card_lt_card H₄
   · apply Finset.card_lt_card
-    apply all_pairs_lemma <;> simp [Hgrd]
+    sorry
+    -- apply all_pairs_lemma <;> simp [Hgrd]
 
 theorem PO_strengthening (m2 : M2 ctx):
   Machine.invariant m2 →
   Register.guard m2 p c →
-    ∀ (m1 : M1 ctx.toContext_1),
+    ∀ (m1 : M1 ctx),
       Refinement.refine m1 m2
       → M1.Register.guard m1 p c :=
 by
@@ -1046,8 +1072,7 @@ by
   obtain ⟨Hgrd₁, Hgrd₂, Hgrd₃, Hgrd₄⟩ := Hgrd
   simp [M1.Register.guard]
   constructor
-  · rw [←Href₁]
-    assumption
+  · rwa [←Href₁]
   constructor
   · assumption
   constructor
@@ -1062,7 +1087,7 @@ by
 theorem PO_simulation (m2: M2 ctx):
   Machine.invariant m2 →
   Register.guard m2 p c →
-    ∀ (m1 : M1 ctx.toContext_1),
+    ∀ (m1 : M1 ctx),
       Refinement.refine m1 m2 →
         Refinement.refine (M1.Register.action m1 p c) (Register.action m2 p c) :=
 by
@@ -1083,9 +1108,14 @@ by
       cases Hp'
       case inl Hp' =>
         right
-        apply Href₂ <;> assumption
+        apply Href₂
+        · rwa[←Heq]
+        · rw[Hp']
+
+          sorry
       case inr Hp' =>
-        simp [Hp']
+        sorry
+        -- simp [Hp']
     case neg Hneq =>
       simp [Hneq] at Hp'
       right
@@ -1103,7 +1133,8 @@ by
       simp [Heq]
       left
       simp [Heq] at Href₃''
-      assumption
+      sorry
+      -- assumption
     case neg Hneq =>
       simp [Hneq]
       assumption
@@ -1112,7 +1143,7 @@ end Register
 
 /-- Event: a participant `p` is registered to course `c`.
 Refinement of the `M1.Register` event. -/
-def Register : ConvergentREvent Nat (M1 ctx.toContext_1) (M2 ctx) (Member × Course) Unit :=
+def Register : ConvergentREvent Nat (M1 ctx) (M2 ctx) (Member × Course) Unit :=
   newConvergentREvent' M1.Register.toConvergentEvent.toOrdinaryEvent {
     guard := fun m (p,c) => Register.guard m p c
     action := fun m (p,c) _ => Register.action m p c

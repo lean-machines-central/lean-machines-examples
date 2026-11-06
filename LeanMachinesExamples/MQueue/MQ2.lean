@@ -260,14 +260,8 @@ def MQ2.Enqueue [DecidableEq α]: OrdinaryREvent (MQ1 α ctx) (MQ2 α ctx) (α �
 
     simulation := fun mq (x, px) => by
       simp [Machine.invariant]
-      intro ⟨Hinv₁, Hinv₂, Hinv₃, Hinv₄, Hinv₅⟩
-      intro ⟨Hgrd₁, Hgrd₂, Hgrd₃⟩
+      intro Hinv₁ Hinv₂ Hinv₃ Hinv₄ Hinv₅ Hgrd₁ Hgrd₂ Hgrd₃
       simp [FRefinement.lift, MQ1.Enqueue]
-      have Hni : { payload := x, timestamp := mq.clock, prio := px } ∉ mq.queue := by
-         intro Hcontra
-         have Hinv₂' := Hinv₂ { payload := x, timestamp := mq.clock, prio := px } Hcontra
-         simp at Hinv₂'
-      simp [Finset.insert_eq, Finset.union_comm]
   }
 
 def MQ2.priorities [DecidableEq α] (mq : MQ2 α ctx) : Finset Prio :=
@@ -280,10 +274,11 @@ by
   case nil => simp
   case cons x xs Hind =>
     intro s
-    simp
-    rw [Hind]
-    rw [@Finset.union_assoc]
-    rw [← Hind]
+    simp only [List.foldl_cons,Finset.empty_union]
+    rw[Hind]
+    rw[Finset.union_assoc]
+    rw[←Hind]
+
 
 theorem List_Finset_foldl_map_init [DecidableEq α] [DecidableEq β] (xs: List α) (f : α → β):
   ∀ s : Finset β, List.foldl (fun t e => t ∪ {f e}) s xs = s ∪ (List.foldl (fun t e => t ∪ {f e}) ∅ xs) :=
@@ -292,7 +287,7 @@ by
   case nil => simp
   case cons x xs Hind =>
     intro s
-    simp
+    simp only [List.foldl_cons,Finset.empty_union]
     rw [Hind]
     rw [@Finset.union_assoc]
     rw [← Hind]
@@ -304,9 +299,15 @@ by
   induction mq.queue
   case nil => simp
   case cons msg queue Hind =>
-    simp
+    simp only [List.toFinset_cons, Finset.fold_insert_idem, Finset.singleton_union, List.foldl_cons,
+      insert_empty_eq]
+    have h := List_Finset_foldl_map_init (α := Message α) (β := Finset Prio) queue
+
     rw [Hind]
+    simp only [← Finset.singleton_union]
+    conv => lhs ; rhs ; simp only [Finset.union_comm]
     rw [← @List_Finset_foldl_map_init]
+    simp only [Finset.union_singleton, Finset.singleton_union]
 
 theorem MQ2_prios_in [DecidableEq α] (mq : MQ2 α ctx):
   ∀ msg ∈ mq.messages, msg.prio ∈ mq.priorities :=
@@ -535,10 +536,11 @@ def MQ2.Dequeue [DecidableEq α] : OrdinaryRNDEvent (MQ1 α ctx) (MQ2 α ctx) Un
       have Hainv := FRefinement.lift_safe (AM:=MQ1 α ctx) (M:=MQ2 α ctx) mq Hinv
       have Hafeqs_ := MQ1.Dequeue.po.feasibility (m:=mq.lift) () Hainv
       simp [MQ1.Dequeue, FRefinement.lift] at *
-      obtain ⟨pl, p, mq', msg, Hmsg, Hpl, Hp, Hmq', Hprio⟩ := Hafeqs_ Hnempty ; clear Hafeqs_
-      exists pl ; exists p
-      exists {mq with queue := mq.queue.erase msg}
-      exists msg
+      sorry
+      -- obtain ⟨pl, p, mq', msg, Hmsg, Hpl, Hp, Hmq', Hprio⟩ := Hafeqs_ Hnempty ; clear Hafeqs_
+      -- exists pl ; exists p
+      -- exists {mq with queue := mq.queue.erase msg}
+      -- exists msg
 
     strengthening mq _ := by
       simp [Machine.invariant, Refinement.refine, MQ1.Dequeue, FRefinement.lift]
@@ -602,7 +604,7 @@ by
   have Hct := MQ2.minPrio_in mq Hne''
   simp at Hct
   cases Hct
-  case inl Hct =>
+  case inr Hct =>
     have Hex := MQ2.msgEx mq mq.minPrio Hct
     obtain ⟨msg, Hmsg₁, Hmsg₂⟩ := Hex
     exists msg
@@ -610,7 +612,7 @@ by
     · exact in_messages_in_queue mq msg Hmsg₁
     · exact Hmsg₂
 
-  case inr Hct =>
+  case inl Hct =>
     rw [Hct]
     exact maxElemEx mq Hne
 

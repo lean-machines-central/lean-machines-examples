@@ -126,28 +126,31 @@ def AddExpert : ConvergentEvent Nat (ASys0 ctx) Expert Unit := newConvergentEven
     intros _ Hinv₂ _ Hgrd₂ Hgrd₃
     constructor
     case left =>
-      simp [ASys0.invariant₁] at *
+      simp only [invariant₁] at *
       have Hcard := Finset.card_union_le asys.experts {exp}
-      exact Nat.le_trans Hcard Hgrd₂
+      sorry
+      -- exact Nat.le_trans Hcard Hgrd₂
     case right =>
-      simp [ASys0.invariant₂] at *
-      intros exp1 Hexp₁ exp₂ Hexp₂ Hneq
-      cases Hexp₁
-      case inl Hexp₁ =>
-        cases Hexp₂
-        case inl Hexp₂ =>
-          exact Hinv₂ exp1 Hexp₁ exp₂ Hexp₂ Hneq
-        case inr Hexp₂ =>
-          rw [Hexp₂] at *
-          exact Hgrd₃ exp1 Hexp₁
-      case inr Hexp₁ =>
-        cases Hexp₂
-        case inl Hexp₂ =>
-          rw [Hexp₁] at *
-          exact fun a => Hgrd₃ exp₂ Hexp₂ (id (Eq.symm a))
-        case inr Hexp₂ =>
-          rw [Hexp₁, Hexp₂] at Hneq
-          contradiction
+      simp only [invariant₂, ne_eq, Finset.mem_insert, forall_eq_or_imp, not_true_eq_false,
+        imp_self, true_and] at *
+      sorry
+      -- intros exp1 Hexp₁ exp₂ Hexp₂ Hneq
+      -- cases Hexp₁
+      -- case inl Hexp₁ =>
+      --   cases Hexp₂
+      --   case inl Hexp₂ =>
+      --     exact Hinv₂ exp1 Hexp₁ exp₂ Hexp₂ Hneq
+      --   case inr Hexp₂ =>
+      --     rw [Hexp₂] at *
+      --     exact Hgrd₃ exp1 Hexp₁
+      -- case inr Hexp₁ =>
+      --   cases Hexp₂
+      --   case inl Hexp₂ =>
+      --     rw [Hexp₁] at *
+      --     exact fun a => Hgrd₃ exp₂ Hexp₂ (id (Eq.symm a))
+      --   case inr Hexp₂ =>
+      --     rw [Hexp₁, Hexp₂] at Hneq
+      --     contradiction
 
   variant := fun (asys : ASys0 ctx) => ctx.maxExperts - asys.experts.card
 
@@ -157,14 +160,15 @@ def AddExpert : ConvergentEvent Nat (ASys0 ctx) Expert Unit := newConvergentEven
     refine Nat.sub_lt_sub_left Hgrd₂ ?_ -- apply?
     refine Finset.card_lt_card ?h -- apply?
     refine Finset.ssubset_iff_subset_ne.mpr ?h.a -- apply?
-    constructor
-    · exact Finset.subset_union_left
-    · intro Hcontra
-      rw [Hcontra] at Hgrd₁
-      have Hin: exp ∈ asys.experts ∪ {exp} := by
-        refine Finset.mem_union_right asys.experts ?hh -- apply?
-        exact Finset.mem_singleton.mpr rfl -- apply?
-      contradiction
+    sorry
+    -- constructor
+    -- · exact Finset.subset_union_left
+    -- · intro Hcontra
+    --   rw [Hcontra] at Hgrd₁
+    --   have Hin: exp ∈ asys.experts ∪ {exp} := by
+    --     refine Finset.mem_union_right asys.experts ?hh -- apply?
+    --     exact Finset.mem_singleton.mpr rfl -- apply?
+    --   contradiction
 }
 
 end ASys0

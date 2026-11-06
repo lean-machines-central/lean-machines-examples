@@ -339,8 +339,6 @@ def LeaveIsland₁ : ConvergentREvent Nat (Bridge1 ctx) (Bridge2 ctx) Unit Unit 
       simp
       intros _ _  am
       simp [Refinement.refine, refine, Bridge1.LeaveIsland]
-      intro Href
-      simp [←Href] at *
   }
 
 /- Event: leaving island (decomposed, part 2), refinement of `Bridge1.LeaveIsland`. -/
@@ -364,8 +362,8 @@ def LeaveIsland₂ : ConvergentREvent Nat (Bridge1 ctx) (Bridge2 ctx) Unit Unit 
         simp [*] at *
       case inr Hml =>
         simp [*] at *
-        rw [Nat.add_comm]
-        assumption
+        omega
+
 
     variant := fun b2 => Bridge1.LeaveIsland.po.variant b2.toBridge1
 
@@ -387,9 +385,6 @@ def LeaveIsland₂ : ConvergentREvent Nat (Bridge1 ctx) (Bridge2 ctx) Unit Unit 
       simp
       intros _ _ am
       simp [Refinement.refine, refine, Bridge1.LeaveIsland]
-      intro Href
-      simp [←Href] at *
-
   }
 
 

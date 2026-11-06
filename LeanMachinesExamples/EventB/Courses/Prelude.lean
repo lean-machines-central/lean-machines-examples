@@ -132,24 +132,16 @@ by
   have H₁:= (Finset.ssubset_iff (s:=s) (t:=t ∪ {x})).mpr
   apply H₁
   exists x
-  simp [Hx]
-  intros y Hy
-  simp [Hx] at Hy
-  cases Hy
-  case inl Hy =>
-    simp [Hy]
-  case inr Hy =>
-    simp [Hy]
-    left
-    apply Hsub ; assumption
+  apply And.intro Hx
+  simp only [Finset.union_singleton]
+  exact (Finset.insert_subset_insert_iff Hx).mpr Hsub
 
-/-
 theorem Finset_ex [DecidableEq α] (s t : Finset α):
   s ⊂ t → ∃ x ∈ t, x ∉ s :=
 by
   intro Hsub
   exact Set.exists_of_ssubset Hsub
--/
+
 
 theorem Finset_ssubset_insert_right [DecidableEq α] (s t : Finset α) (x : α):
   s ⊂ t → s ⊂ insert x t :=
@@ -187,7 +179,7 @@ by
         rw [←Hfalse] at Hxt
         have Hfalse': y ∈ t := by simp [Hy]
         contradiction
-      apply HasSubset.Subset.ssubset_of_not_subset
+      apply LE.le.ssubset_of_not_superset
       · exact Finset.insert_subset_insert x Hst'
       · exact fun a => Hys (a Hyt)
 
@@ -216,6 +208,5 @@ theorem Finset_subset_product_of_subsets (s : Finset α) (t : Finset β):
   → (∀ cp ∈ cps, cp.2 ∈ t)
   → cps ⊆ s ×ˢ t :=
 by
-  intros H₁ h₂
-  intros cp Hcp
+  intros H₁ h₂ cp Hcp
   exact Finset.mem_product.mpr { left := H₁ cp Hcp, right := h₂ cp Hcp }

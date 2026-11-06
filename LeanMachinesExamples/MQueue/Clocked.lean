@@ -70,7 +70,7 @@ instance: Preorder Clock where
       apply Clock_LE
       simp
       exact Nat.le_trans H₁ H₂
-  lt_iff_le_not_le ck₁ ck₂ := by
+  lt_iff_le_not_ge ck₁ ck₂ := by
     cases ck₁
     case mk v₁ =>
     cases ck₂

@@ -141,8 +141,7 @@ def B2.PutPrio [DecidableEq α] : ConvergentREvent Nat (B1 ctx α) (B2 ctx α) (
     lift_in := fun (_, x) => x
     safety := fun b2 (p, x) => by
       simp [Machine.invariant]
-      intros _ Hgrd
-      linarith
+
     strengthening := fun b2 _ => by
       simp [Machine.invariant, B1.Put, FRefinement.lift]
     simulation := fun b2 (_, x) => by

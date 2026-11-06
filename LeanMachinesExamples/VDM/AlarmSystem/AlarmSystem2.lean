@@ -133,7 +133,11 @@ def AssignExpert : OrdinaryREvent (ASys1 ctx) (ASys2 ctx) (Period × Expert) Uni
         obtain ⟨e', ⟨Hinv₂', Hinv₂''⟩⟩ := Hinv₂'
         exists e'
         constructor
-        · exact Finset.mem_union_left {e} Hinv₂'
+        · simp only [←Finset.singleton_union]
+          conv =>
+            lhs
+            rw[Finset.union_comm]
+          exact Finset.mem_union_left {e} Hinv₂'
         -- next
         assumption
       case _ Hneq =>

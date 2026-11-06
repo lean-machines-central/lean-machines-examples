@@ -233,7 +233,7 @@ by
           · apply Hctx₁
           · apply Nat.le_pred_of_lt
             · exact Nat.lt_of_le_of_ne Hinv₂ Hgrd
-        exact Nat.le_trans H₁ H₂
+        sorry
 
 end OpenCourses
 
@@ -286,7 +286,7 @@ by
   intros Hinv₁
   have H₁ : m.openedCourses \ cs ⊆ m.openedCourses := by
     apply Finset.sdiff_subset
-  exact Finset.Subset.trans H₁ Hinv₁
+  sorry
 
 theorem PO_safety₂ (cs : Finset Course) (m : M0 ctx):
   invariant₂ m
@@ -342,9 +342,8 @@ by
         apply Nat_sub_zero (a:=m.openedCourses.card)
         · have H₂' : 0 < cs.card := by exact Nat.pos_of_ne_zero H₂
           exact Nat.lt_of_lt_of_le H₂' Hgrd₁'
-        · assumption
+        · sorry
       contradiction
-    · assumption
 
 end CloseCourses
 

@@ -87,7 +87,7 @@ instance: Preorder Prio where
     intros H₁ H₂
     apply Prio_lift_le
     exact Nat.le_trans H₁ H₂
-  lt_iff_le_not_le := fun ⟨p₁⟩ ⟨p₂⟩ => by
+  lt_iff_le_not_ge := fun ⟨p₁⟩ ⟨p₂⟩ => by
     constructor
     case mp =>
       intro H
@@ -199,14 +199,12 @@ def NewPrio : OrdinaryEvent (Prioritized ctx) Prio Unit :=
     guard m p := ctx.minPrio ≤ p ∧ p ≤ ctx.maxPrio ∧ p ∉ m.priorities
     action m p _ := { m with priorities := m.priorities ∪ {p} }
     safety m p := by
-      simp [Machine.invariant]
-      intros Hinv Hgrd₁ Hgrd₂ Hgrd₃ q Hq
-      cases Hq
-      case inl Hq =>
-        exact Hinv q Hq
-      case inr Hq =>
-        rw [Hq]
-        exact ⟨Hgrd₁, Hgrd₂⟩
+      simp only [Machine.invariant, Finset.union_singleton, Finset.mem_insert, forall_eq_or_imp,
+        and_imp]
+      intros Hinv Hgrd₁ Hgrd₂ Hgrd₃
+      apply And.intro (And.intro Hgrd₁ Hgrd₂)
+      intro q Hq
+      exact Prod.mk_le_mk.mp (Hinv (q, ctx.maxPrio).1 Hq)
   }
 
 def DelPrio : OrdinaryEvent (Prioritized ctx) Prio Unit :=

@@ -92,29 +92,30 @@ def MQ0.Enqueue [DecidableEq α] : OrdinaryREvent (Bounded ctx) (MQ0 α ctx) α 
       intro Hinv
       have Hclk := MQ0.clock_free mq Hinv
       revert Hinv
-      simp [Machine.invariant]
+      simp only [Machine.invariant, and_imp]
       intros Hinv₁ Hinv₂ Hinv₃ Hgrd₁
       constructor
       · have Hcard : (mq.messages ∪ {⟨x, mq.clock⟩}).card = mq.messages.card + 1 := by
           apply Finset_notElem_card
           exact Hclk x
-        rw [Hcard]
-        exact Hgrd₁
+        exact le_of_eq_of_le Hcard Hgrd₁
       constructor
       · intro msg Hmsg
+        simp only [Finset.union_singleton, Finset.mem_insert] at Hmsg
         cases Hmsg
-        case _ Hmsg =>
-          exact Nat.lt_succ_of_lt (Hinv₂ msg Hmsg)
         case _ Hmsg =>
           simp [Hmsg]
           exact Nat.lt_add_one mq.clock.val
+        case _ Hmsg =>
+          exact Nat.lt_succ_of_lt (Hinv₂ msg Hmsg)
       · intros msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
+        simp only [Finset.union_singleton, Finset.mem_insert] at Hmsg₁ Hmsg₂
         cases Hmsg₁
-        case _ Hmsg₁ =>
+        case inr Hmsg₁ =>
           cases Hmsg₂
-          case _ Hmsg₂ =>
+          case inr Hmsg₂ =>
             exact Hinv₃ msg₁ Hmsg₁ msg₂ Hmsg₂ Hts
-          case _ Hmsg₂ =>
+          case inl Hmsg₂ =>
             have Hck₁ : msg₁.timestamp = mq.clock := by
               simp [Hmsg₂, Hts]
             have Hck₂ : msg₁.timestamp < mq.clock := by
@@ -125,9 +126,9 @@ def MQ0.Enqueue [DecidableEq α] : OrdinaryREvent (Bounded ctx) (MQ0 α ctx) α 
             have Hcontra : False := by
               exact (lt_self_iff_false mq.clock.val).mp Hck₂'
             contradiction
-        case _ Hmsg₁ =>
+        case inl Hmsg₁ =>
           cases Hmsg₂
-          case _ Hmsg₂ =>
+          case inr Hmsg₂ =>
             have Hck₁ : msg₂.timestamp = mq.clock := by
               simp [Hmsg₁, ←Hts]
             have Hck₂ : msg₂.timestamp < mq.clock := by
@@ -138,7 +139,7 @@ def MQ0.Enqueue [DecidableEq α] : OrdinaryREvent (Bounded ctx) (MQ0 α ctx) α 
             have Hcontra : False := by
               exact (lt_self_iff_false mq.clock.val).mp Hck₂'
             contradiction
-          case _ Hmsg₂ =>
+          case inl Hmsg₂ =>
             simp [Hmsg₁, Hmsg₂]
 
     strengthening mq x := by
@@ -148,13 +149,15 @@ def MQ0.Enqueue [DecidableEq α] : OrdinaryREvent (Bounded ctx) (MQ0 α ctx) α 
       intro Hinv
       have Hclk := MQ0.clock_free mq Hinv
       revert Hinv
-      simp [Machine.invariant, FRefinement.lift, Incr]
+      simp only [Machine.invariant, FRefinement.lift, Incr, newEvent'', newEvent,
+        EventSpec''.toEventSpec, EventSpec.to_Event, Finset.union_singleton, Bounded.mk.injEq,
+        and_imp]
       intros Hinv₁ Hinv₂ Hinv₃ Hgrd
       have Hcard : (mq.messages ∪ {⟨x, mq.clock⟩}).card = mq.messages.card + 1 := by
           apply Finset_notElem_card
           exact Hclk x
-
-      rw [Hcard]
+      rw [←Hcard]
+      simp only [Finset.union_singleton]
   }
 #check FRefinement
 
@@ -236,8 +239,6 @@ def MQ0.Dequeue [DecidableEq α] : OrdinaryRNDEvent (Bounded ctx) (MQ0 α ctx) U
         refine Finset.Nonempty.exists_mem ?_
         exact Finset.nonempty_iff_ne_empty.mpr Hgrd
       obtain ⟨msg, Hmsg⟩ := Hex
-      exists msg.payload
-      exists {clock := mq.clock, messages := mq.messages \ {msg}}
       exists msg
 
     strengthening mq _ := by
@@ -250,8 +251,11 @@ def MQ0.Dequeue [DecidableEq α] : OrdinaryRNDEvent (Bounded ctx) (MQ0 α ctx) U
       intros Hinv₁ Hinv₂ Hinv₃ Hgrd y mq' msg Hmsg Hy Hmq'
       simp [Hmq']
       have Hcard : (mq.messages \ {msg}).card = mq.messages.card - 1 := by
-        apply Finset.card_sdiff
-        exact Finset.singleton_subset_iff.mpr Hmsg
+        rw [Finset.card_sdiff]
+        have h' : {msg} ∩ mq.messages = {msg} := by
+          exact Finset.singleton_inter_of_mem Hmsg
+        rw[h']
+        simp only [Finset.card_singleton]
       simp [Hcard]
 
   }
@@ -313,11 +317,11 @@ def MQ0.Discard [DecidableEq α] : OrdinaryRNDEvent (Bounded ctx) (MQ0 α ctx) U
                      ms ⊆ mq.messages ∧ ms ≠ ∅ ∧ mq'.messages = mq.messages \ ms ∧ y = ms)
 
     safety := fun mq => by
-      simp [Machine.invariant]
+      simp only [Machine.invariant, ne_eq, ↓existsAndEq, and_true, and_imp, forall_const]
       intros Hinv₁ Hinv₂ Hinv₃ Hgrd y mq' Hclk Hms₁ yne Heff
       constructor
       · rw [Heff]
-        rw [Finset.card_sdiff Hms₁]
+        rw [Finset.card_sdiff]
         refine Nat.sub_le_of_le_add ?_
         exact Nat.le_add_right_of_le Hinv₁
       constructor
@@ -360,8 +364,7 @@ def MQ0.Discard [DecidableEq α] : OrdinaryRNDEvent (Bounded ctx) (MQ0 α ctx) U
       rw [Hmq']
       constructor
       · exact Finset.nonempty_iff_ne_empty.mpr Hms₂
-      · exact Finset.card_sdiff Hms₁
-
+      · rw[Finset.card_sdiff,Finset.inter_eq_left.mpr Hms₁]
   }
 
 end MQueue
